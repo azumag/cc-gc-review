@@ -211,7 +211,7 @@ watch_with_fswatch() {
 watch_with_polling() {
     local session="$1"
     local pattern="$2"
-    local -A processed_files
+    local processed_files=""
     
     log "Using polling for file monitoring (checking every 2 seconds)"
     
@@ -221,9 +221,9 @@ watch_with_polling() {
                 local mtime=$(stat -c %Y "$filepath" 2>/dev/null || stat -f %m "$filepath" 2>/dev/null)
                 local file_key="${filepath}_${mtime}"
                 
-                if [[ -z "${processed_files[$file_key]:-}" ]]; then
+                if [[ ! "$processed_files" =~ "$file_key" ]]; then
                     log "Detected new/modified file: $filepath"
-                    processed_files[$file_key]=1
+                    processed_files="${processed_files}${file_key}|"
                     
                     local content=$(cat "$filepath")
                     if [[ -n "$content" ]]; then
