@@ -50,8 +50,14 @@ chmod +x *.sh
 # オプション組み合わせ
 ./cc-gen-review.sh --think -c -v claude
 
+# 既存ファイル再送信付き
+./cc-gen-review.sh --resend --think --custom-command "optimize" claude
+
 # カスタムコマンド付き
 ./cc-gen-review.sh --custom-command "refactor" claude
+
+# 起動時に既存のレビューファイルを再送信
+./cc-gen-review.sh --resend claude
 ```
 
 起動後、別のターミナルで以下を実行してセッションにアタッチ：
@@ -86,6 +92,7 @@ export CC_GEN_REVIEW_VERBOSE="true"
 | `-c, --auto-claude-launch` | 自動でClaudeを起動 |
 | `--think` | レビュー内容の後に'think'を追加 |
 | `--custom-command COMMAND` | レビュー内容の先頭にカスタムコマンド（/COMMAND）を付加 |
+| `--resend` | 起動時に既存のレビューファイルがあれば再送信 |
 | `-v, --verbose` | 詳細ログを出力 |
 | `-h, --help` | ヘルプを表示 |
 
@@ -104,6 +111,21 @@ export CC_GEN_REVIEW_VERBOSE="true"
 ./test.sh
 ```
 
+## ログ出力
+
+実行中は以下のようなリアルタイムログが表示されます：
+
+```
+🔔 New review detected via polling!
+📝 Review received (1250 characters)
+⚡ Custom command enabled - prepending '/refactor'
+🤔 Think mode enabled - appending 'think' command
+📤 Sending review to tmux session: claude
+✅ Review sent successfully
+```
+
+verboseモード（`-v`オプション）を使用すると、さらに詳細なログが表示されます。
+
 ## トラブルシューティング
 
 ### tmuxセッションが見つからない
@@ -115,7 +137,7 @@ tmux list-sessions  # 既存のセッションを確認
 ### レビューが送信されない
 
 - 一時ディレクトリの権限を確認
-- verboseモードで詳細ログを確認
+- verboseモードで詳細ログを確認: `./cc-gen-review.sh -v claude`
 - gemini-cliがインストールされているか確認
 
 ### 無限ループの防止

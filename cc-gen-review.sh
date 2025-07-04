@@ -11,6 +11,7 @@ TMP_DIR="/tmp"
 THINK_MODE=false
 VERBOSE=false
 CUSTOM_COMMAND=""
+RESEND_EXISTING=false
 
 # ログ関数
 log() {
@@ -35,6 +36,7 @@ Options:
     -c, --auto-claude-launch    自動でClaudeを起動
     --think                     レビュー内容の後に'think'を追加
     --custom-command COMMAND    レビュー内容の先頭にカスタムコマンドを付加 (例: --custom-command "refactor" → /refactor)
+    --resend                    起動時に既存のレビューファイルがあれば再送信
     -v, --verbose               詳細ログを出力
     -h, --help                  このヘルプを表示
 
@@ -60,6 +62,10 @@ parse_args() {
             --custom-command)
                 CUSTOM_COMMAND="$2"
                 shift 2
+                ;;
+            --resend)
+                RESEND_EXISTING=true
+                shift
                 ;;
             -v|--verbose)
                 VERBOSE=true
@@ -151,6 +157,21 @@ watch_review_files() {
     
     log "Starting file watch on: $watch_file"
     
+    # 起動時の既存ファイルチェック
+    if [[ -f "$watch_file" ]]; then
+        if [[ "$RESEND_EXISTING" == true ]]; then
+            log "Existing review file found, resending due to --resend option"
+            local content=$(cat "$watch_file")
+            if [[ -n "$content" ]]; then
+                echo "🔄 Resending existing review file..."
+                send_review_to_tmux "$session" "$content"
+            fi
+        else
+            log "Existing review file found, ignoring (use --resend to send)"
+            echo "⚠️  Existing review file found but ignored (use --resend to send)"
+        fi
+    fi
+    
     # inotifyが使える場合はinotifywait、そうでなければfswatch、どちらもなければポーリング
     if command -v inotifywait >/dev/null 2>&1; then
         watch_with_inotify "$session" "$watch_file"
@@ -219,6 +240,12 @@ watch_with_polling() {
     log "Using polling for file monitoring (checking every 2 seconds)"
     log "Watching file: $watch_file"
     
+    # 初回の既存ファイルのmtimeを取得して初期化（送信を防ぐため）
+    if [[ -f "$watch_file" ]]; then
+        last_mtime=$(stat -c %Y "$watch_file" 2>/dev/null || stat -f %m "$watch_file" 2>/dev/null)
+        log "Initial file mtime: $last_mtime (skipping initial send)"
+    fi
+    
     while true; do
         if [[ -f "$watch_file" ]]; then
             local current_mtime=$(stat -c %Y "$watch_file" 2>/dev/null || stat -f %m "$watch_file" 2>/dev/null)
@@ -258,6 +285,7 @@ main() {
     echo "Review file: $TMP_DIR/gemini-review"
     echo "Think mode: $THINK_MODE"
     echo "Auto-launch Claude: $AUTO_CLAUDE_LAUNCH"
+    echo "Resend existing: $RESEND_EXISTING"
     if [[ -n "$CUSTOM_COMMAND" ]]; then
         echo "Custom command: /$CUSTOM_COMMAND"
     fi

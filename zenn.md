@@ -421,3 +421,9 @@ https://github.com/azumag/cc-gc-review
 - [Claude Code Documentation](https://docs.anthropic.com/en/docs/claude-code)
 - [tmux manual](https://man7.org/linux/man-pages/man1/tmux.1.html)
 - [jq manual](https://stedolan.github.io/jq/manual/)
+
+# memo
+- geminiからのレビューを監視したいとき
+```
+tail -F /tmp/gemini-review
+```
