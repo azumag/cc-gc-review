@@ -133,11 +133,15 @@ $review_content"
     # レビュー内容を送信
     tmux send-keys -t "$session" "$review_content" Enter
     
-    echo "✅ Review sent successfully"
-    
     # 5秒待ってから追加のEnterを送信
     sleep 5
     tmux send-keys -t "$session" "" Enter
+
+    # 保険で再度送信
+    sleep 5
+    tmux send-keys -t "$session" "" Enter
+
+    echo "✅ Review sent successfully"
 }
 
 # ファイル監視
