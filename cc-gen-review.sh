@@ -119,17 +119,23 @@ send_review_to_tmux() {
     local session="$1"
     local review_content="$2"
     
+    echo "📝 Review received (${#review_content} characters)"
+    
     # thinkモードの場合はレビュー内容の末尾に追加
     if [[ "$THINK_MODE" == true ]]; then
         review_content="${review_content}
 
 think"
+        echo "🤔 Think mode enabled - appending 'think' command"
     fi
     
-    log "Sending review to tmux session: $session"
+    echo "📤 Sending review to tmux session: $session"
+    log "Review content preview: ${review_content:0:100}..."
     
     # レビュー内容を送信
     tmux send-keys -t "$session" "$review_content" Enter
+    
+    echo "✅ Review sent successfully"
     
     # 5秒待ってから追加のEnterを送信
     sleep 5
@@ -169,7 +175,10 @@ watch_with_inotify() {
                 if [[ -f "$filepath" ]]; then
                     local content=$(cat "$filepath")
                     if [[ -n "$content" ]]; then
+                        echo "🔔 New review detected via inotifywait!"
                         send_review_to_tmux "$session" "$content"
+                    else
+                        log "Warning: File exists but content is empty"
                     fi
                 fi
             fi
@@ -190,7 +199,10 @@ watch_with_fswatch() {
         if [[ -f "$filepath" ]]; then
             local content=$(cat "$filepath")
             if [[ -n "$content" ]]; then
+                echo "🔔 New review detected via fswatch!"
                 send_review_to_tmux "$session" "$content"
+            else
+                log "Warning: File exists but content is empty"
             fi
         fi
     done
@@ -215,6 +227,7 @@ watch_with_polling() {
                 
                 local content=$(cat "$watch_file")
                 if [[ -n "$content" ]]; then
+                    echo "🔔 New review detected via polling!"
                     log "Sending review content (${#content} chars) to session: $session"
                     send_review_to_tmux "$session" "$content"
                 else
