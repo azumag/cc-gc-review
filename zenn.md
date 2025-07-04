@@ -191,6 +191,12 @@ chmod +x *.sh
 
 # thinkモードを有効化（レビュー後に深い思考を促す）
 ./cc-gen-review.sh --think claude
+
+# カスタムコマンド付き（レビュー先頭に/refactorを付加）
+./cc-gen-review.sh --custom-command "refactor" claude
+
+# オプション組み合わせ
+./cc-gen-review.sh --think --custom-command "optimize" -c -v claude
 ```
 
 起動すると以下のような表示が出ます：
@@ -198,9 +204,10 @@ chmod +x *.sh
 ```
 === cc-gen-review starting ===
 Session name: claude
-Tmp directory: ./tmp
+Review file: /tmp/gemini-review
 Think mode: true
 Auto-launch Claude: true
+Custom command: /optimize
 =============================
 
 ✓ tmux session 'claude' is ready
@@ -269,12 +276,55 @@ if [[ ! "$processed_files" =~ "$file_key" ]]; then
 fi
 ```
 
+# 機能詳細
+
+## カスタムコマンド機能
+
+`--custom-command`オプションを使用すると、レビュー内容の先頭に指定したコマンドを付加できます：
+
+```bash
+# リファクタリングを促すコマンド
+./cc-gen-review.sh --custom-command "refactor" claude
+
+# レビュー結果は以下の形式で送信されます：
+/refactor
+
+[Geminiからのレビュー内容]
+```
+
+これにより、Claude Codeが自動的にリファクタリングモードで作業を開始します。
+
+## Thinkモード
+
+`--think`オプションを使用すると、レビュー内容の末尾に`think`コマンドが追加され、Claudeがより深く考察します：
+
+```bash
+./cc-gen-review.sh --think claude
+
+# レビュー結果は以下の形式で送信されます：
+[Geminiからのレビュー内容]
+
+think
+```
+
+## ログ機能
+
+実行中は以下のようなリアルタイムログが表示されます：
+
+```
+🔔 New review detected via polling!
+📝 Review received (1250 characters)
+⚡ Custom command enabled - prepending '/refactor'
+🤔 Think mode enabled - appending 'think' command
+📤 Sending review to tmux session: claude
+✅ Review sent successfully
+```
+
 # カスタマイズ
 
 ## 環境変数による設定
 
 ```bash
-export CC_GEN_REVIEW_TMP_DIR="/tmp/reviews"
 export CC_GEN_REVIEW_VERBOSE="true"
 ```
 
@@ -309,9 +359,50 @@ tmux list-sessions  # 既存のセッションを確認
 
 このエラーは非対話型環境で実行した場合に発生します。別ターミナルでtmuxにアタッチしてください。
 
+# 実用的な使用例
+
+## パターン1: 基本的なレビューワークフロー
+
+```bash
+./cc-gen-review.sh -c claude
+```
+
+Claude Codeで作業し、終了時にGeminiの客観的なレビューを受け取って改善。
+
+## パターン2: リファクタリング重視
+
+```bash
+./cc-gen-review.sh --custom-command "refactor" claude
+```
+
+レビューを受けた後、自動的にリファクタリングモードに入り、コード改善を実施。
+
+## パターン3: 深い考察モード
+
+```bash
+./cc-gen-review.sh --think --custom-command "analyze" claude
+```
+
+分析コマンドでレビューを開始し、その後深い思考モードで包括的な検討を実施。
+
+## パターン4: デバッグ・トラブルシューティング
+
+```bash
+./cc-gen-review.sh --custom-command "debug" -v claude
+```
+
+デバッグモードでレビューを受け、詳細ログで動作を確認。
+
 # まとめ
 
 cc-gen-reviewを使うことで、Claude Codeでの開発中に自動的にGeminiのレビューを受けることができます。異なるAIの視点を取り入れることで、コード品質の向上が期待できます。
+
+特に以下の機能により、柔軟なワークフローが実現できます：
+
+- **カスタムコマンド**: 特定の作業モードに自動切り替え
+- **Thinkモード**: より深い考察を促進
+- **詳細ログ**: 動作状況の可視化
+- **シンプルな設定**: `/tmp/gemini-review`固定でお手軽導入
 
 また、このツールは他のAIツールとの連携にも応用できます。例えば：
 
