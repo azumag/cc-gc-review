@@ -49,6 +49,9 @@ chmod +x *.sh
 
 # オプション組み合わせ
 ./cc-gen-review.sh --think -c -v claude
+
+# カスタムコマンド付き
+./cc-gen-review.sh --custom-command "refactor" claude
 ```
 
 起動後、別のターミナルで以下を実行してセッションにアタッチ：
@@ -82,6 +85,7 @@ export CC_GEN_REVIEW_VERBOSE="true"
 |-----------|------|
 | `-c, --auto-claude-launch` | 自動でClaudeを起動 |
 | `--think` | レビュー内容の後に'think'を追加 |
+| `--custom-command COMMAND` | レビュー送信後にカスタムコマンドを実行 |
 | `-v, --verbose` | 詳細ログを出力 |
 | `-h, --help` | ヘルプを表示 |
 

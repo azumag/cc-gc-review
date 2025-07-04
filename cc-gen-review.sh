@@ -10,6 +10,7 @@ AUTO_CLAUDE_LAUNCH=false
 TMP_DIR="/tmp"
 THINK_MODE=false
 VERBOSE=false
+CUSTOM_COMMAND=""
 
 # ログ関数
 log() {
@@ -31,14 +32,16 @@ Usage: $0 [OPTIONS] SESSION_NAME
 Claude Code と Gemini を stop hook 連携させるサポートツール
 
 Options:
-    -c, --auto-claude-launch 自動でClaudeを起動
-    --think                  レビュー内容の後に'think'を追加
-    -v, --verbose            詳細ログを出力
-    -h, --help               このヘルプを表示
+    -c, --auto-claude-launch    自動でClaudeを起動
+    --think                     レビュー内容の後に'think'を追加
+    --custom-command COMMAND    レビュー送信後にカスタムコマンドを実行 (例: --custom-command "refactor")
+    -v, --verbose               詳細ログを出力
+    -h, --help                  このヘルプを表示
 
 Example:
     $0 -c claude
     $0 --think --verbose claude-session
+    $0 --custom-command "refactor" claude
 EOF
 }
 
@@ -53,6 +56,10 @@ parse_args() {
             --think)
                 THINK_MODE=true
                 shift
+                ;;
+            --custom-command)
+                CUSTOM_COMMAND="$2"
+                shift 2
                 ;;
             -v|--verbose)
                 VERBOSE=true
@@ -110,6 +117,14 @@ send_review_to_tmux() {
 
 think"
         echo "🤔 Think mode enabled - appending 'think' command"
+    fi
+    
+    # カスタムコマンドの場合はレビュー内容の先頭に追加
+    if [[ -n "$CUSTOM_COMMAND" ]]; then
+        review_content="/$CUSTOM_COMMAND
+
+$review_content"
+        echo "⚡ Custom command enabled - prepending '/$CUSTOM_COMMAND'"
     fi
     
     echo "📤 Sending review to tmux session: $session"
@@ -239,6 +254,9 @@ main() {
     echo "Review file: $TMP_DIR/gemini-review"
     echo "Think mode: $THINK_MODE"
     echo "Auto-launch Claude: $AUTO_CLAUDE_LAUNCH"
+    if [[ -n "$CUSTOM_COMMAND" ]]; then
+        echo "Custom command: /$CUSTOM_COMMAND"
+    fi
     echo "============================="
     
     log "Starting cc-gen-review with session: $SESSION_NAME"
