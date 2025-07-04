@@ -34,7 +34,7 @@ Claude Code と Gemini を stop hook 連携させるサポートツール
 Options:
     -c, --auto-claude-launch    自動でClaudeを起動
     --think                     レビュー内容の後に'think'を追加
-    --custom-command COMMAND    レビュー送信後にカスタムコマンドを実行 (例: --custom-command "refactor")
+    --custom-command COMMAND    レビュー内容の先頭にカスタムコマンドを付加 (例: --custom-command "refactor" → /refactor)
     -v, --verbose               詳細ログを出力
     -h, --help                  このヘルプを表示
 
