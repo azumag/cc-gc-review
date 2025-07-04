@@ -89,9 +89,9 @@ export CC_GEN_REVIEW_VERBOSE="true"
 
 1. **hook-handler.sh**がClaude Codeのstop hookから呼び出される
 2. トランスクリプトファイルから最新の作業内容を抽出
-3. Geminiでレビューを実行し、結果を一時ファイルに保存
-4. **cc-gen-review.sh**が一時ファイルを監視
-5. 新しいレビューを検出したら、tmuxセッションに内容を送信
+3. Geminiでレビューを実行し、結果を`gemini-review`ファイルに保存
+4. **cc-gen-review.sh**が`gemini-review`ファイルを監視
+5. ファイルの更新を検出したら、tmuxセッションに内容を送信
 6. Claudeが自動的にレビュー内容を受け取る
 
 ## テスト

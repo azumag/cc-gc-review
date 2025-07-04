@@ -121,9 +121,8 @@ main() {
     local work_summary=$(get_work_summary "$transcript_path")
     log "Work summary extracted (${#work_summary} characters)"
     
-    # レビューファイル名の生成
-    local timestamp=$(date +%s)
-    local review_file="$TMP_DIR/${REVIEW_FILE_PREFIX}-${timestamp}"
+    # レビューファイル名の生成（単純化）
+    local review_file="$TMP_DIR/gemini-review"
     
     # Geminiレビューの実行
     run_gemini_review "$work_summary" "$review_file"

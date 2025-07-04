@@ -138,30 +138,30 @@ send_review_to_tmux() {
 # ファイル監視
 watch_review_files() {
     local session="$1"
-    local watch_pattern="$TMP_DIR/gemini-review-*"
+    local watch_file="$TMP_DIR/gemini-review"
     
-    log "Starting file watch on: $watch_pattern"
+    log "Starting file watch on: $watch_file"
     
     # inotifyが使える場合はinotifywait、そうでなければfswatch、どちらもなければポーリング
     if command -v inotifywait >/dev/null 2>&1; then
-        watch_with_inotify "$session" "$watch_pattern"
+        watch_with_inotify "$session" "$watch_file"
     elif command -v fswatch >/dev/null 2>&1; then
-        watch_with_fswatch "$session" "$watch_pattern"
+        watch_with_fswatch "$session" "$watch_file"
     else
-        watch_with_polling "$session" "$watch_pattern"
+        watch_with_polling "$session" "$watch_file"
     fi
 }
 
 # inotifywaitを使った監視
 watch_with_inotify() {
     local session="$1"
-    local pattern="$2"
+    local watch_file="$2"
     
     log "Using inotifywait for file monitoring"
     
     while true; do
         inotifywait -e modify,create "$TMP_DIR" 2>/dev/null | while read -r dir event file; do
-            if [[ "$file" =~ ^gemini-review- ]]; then
+            if [[ "$file" == "gemini-review" ]]; then
                 local filepath="$dir$file"
                 log "Detected change in: $filepath"
                 
@@ -179,19 +179,17 @@ watch_with_inotify() {
 # fswatchを使った監視
 watch_with_fswatch() {
     local session="$1"
-    local pattern="$2"
+    local watch_file="$2"
     
     log "Using fswatch for file monitoring"
     
-    fswatch -0 "$TMP_DIR" | while IFS= read -r -d '' filepath; do
-        if [[ "$filepath" =~ gemini-review- ]]; then
-            log "Detected change in: $filepath"
-            
-            if [[ -f "$filepath" ]]; then
-                local content=$(cat "$filepath")
-                if [[ -n "$content" ]]; then
-                    send_review_to_tmux "$session" "$content"
-                fi
+    fswatch -0 "$watch_file" | while IFS= read -r -d '' filepath; do
+        log "Detected change in: $filepath"
+        
+        if [[ -f "$filepath" ]]; then
+            local content=$(cat "$filepath")
+            if [[ -n "$content" ]]; then
+                send_review_to_tmux "$session" "$content"
             fi
         fi
     done
@@ -200,28 +198,31 @@ watch_with_fswatch() {
 # ポーリングによる監視
 watch_with_polling() {
     local session="$1"
-    local pattern="$2"
-    local processed_files=""
+    local watch_file="$2"
+    local last_mtime="0"
     
     log "Using polling for file monitoring (checking every 2 seconds)"
+    log "Watching file: $watch_file"
     
     while true; do
-        for filepath in $pattern; do
-            if [[ -f "$filepath" ]]; then
-                local mtime=$(stat -c %Y "$filepath" 2>/dev/null || stat -f %m "$filepath" 2>/dev/null)
-                local file_key="${filepath}_${mtime}"
+        if [[ -f "$watch_file" ]]; then
+            local current_mtime=$(stat -c %Y "$watch_file" 2>/dev/null || stat -f %m "$watch_file" 2>/dev/null)
+            
+            if [[ "$current_mtime" != "$last_mtime" ]]; then
+                log "Detected file change: $watch_file (mtime: $current_mtime)"
+                last_mtime="$current_mtime"
                 
-                if [[ ! "$processed_files" =~ "$file_key" ]]; then
-                    log "Detected new/modified file: $filepath"
-                    processed_files="${processed_files}${file_key}|"
-                    
-                    local content=$(cat "$filepath")
-                    if [[ -n "$content" ]]; then
-                        send_review_to_tmux "$session" "$content"
-                    fi
+                local content=$(cat "$watch_file")
+                if [[ -n "$content" ]]; then
+                    log "Sending review content (${#content} chars) to session: $session"
+                    send_review_to_tmux "$session" "$content"
+                else
+                    log "Warning: File exists but content is empty"
                 fi
             fi
-        done
+        else
+            log "File not found: $watch_file (waiting...)"
+        fi
         sleep 2
     done
 }
@@ -255,7 +256,7 @@ main() {
     
     echo ""
     echo "✓ tmux session '$SESSION_NAME' is ready"
-    echo "✓ Watching for review files in: $TMP_DIR/gemini-review-*"
+    echo "✓ Watching for review file: $TMP_DIR/gemini-review"
     echo ""
     echo "To attach to the session, run:"
     echo "  tmux attach-session -t $SESSION_NAME"
