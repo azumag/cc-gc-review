@@ -217,8 +217,6 @@ watch_with_polling() {
                     log "Warning: File exists but content is empty"
                 fi
             fi
-        else
-            log "File not found: $watch_file (waiting...)"
         fi
         sleep 2
     done
