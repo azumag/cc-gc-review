@@ -51,6 +51,8 @@ run_gemini_review() {
     # Geminiプロンプトの作成
     local prompt="以下の作業内容をレビューして、改善点や注意点があれば日本語で簡潔に指摘してください。良い点も含めてフィードバックをお願いします。
 
+    また、対象ディレクトリが git 管理されている場合は、作業ファイルも含めてレビューしてください。
+
 作業内容:
 $summary
 
@@ -75,6 +77,10 @@ $summary
 main() {
     log "Hook handler started"
     
+    # 現在のディレクトリを取得（Claude Codeの作業ディレクトリ）
+    local working_dir=$(pwd)
+    log "Working directory: $working_dir"
+    
     # 標準入力からJSONを読み取る
     local input=$(cat)
     log "Received input: $input"
@@ -95,6 +101,7 @@ main() {
     log "Session ID: $session_id"
     log "Transcript path: $transcript_path"
     log "Stop hook active: $stop_hook_active"
+    log "Working directory: $working_dir"
     
     # stop_hook_activeがtrueの場合は無限ループを防ぐために終了
     if [[ "$stop_hook_active" == "true" ]]; then
@@ -106,7 +113,7 @@ main() {
     local work_summary=$(get_work_summary "$transcript_path")
     log "Work summary extracted (${#work_summary} characters)"
     
-    # レビューファイル名の生成（固定）
+    # レビューファイル名
     local review_file="/tmp/gemini-review"
     
     # Geminiレビューの実行
@@ -119,4 +126,4 @@ main() {
 trap 'error "Hook handler failed with error on line $LINENO"' ERR
 
 # エントリーポイント
-main
+main "$@"
