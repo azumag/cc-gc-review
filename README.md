@@ -41,14 +41,14 @@ chmod +x *.sh
 # 自動でClaudeも起動
 ./cc-gen-review.sh -c claude
 
-# 一時ディレクトリを指定
-./cc-gen-review.sh --tmp-dir /tmp/reviews claude
-
 # thinkモードを有効化
 ./cc-gen-review.sh --think claude
 
 # 詳細ログを表示
 ./cc-gen-review.sh -v claude
+
+# オプション組み合わせ
+./cc-gen-review.sh --think -c -v claude
 ```
 
 起動後、別のターミナルで以下を実行してセッションにアタッチ：
@@ -68,12 +68,11 @@ tmux attach-session -t claude
 }
 ```
 
-**重要**: hook-handlerはcc-gen-reviewが設定した環境変数を使用するため、cc-gen-reviewを起動してからClaude Codeを使用してください。
+レビューファイルは固定で`/tmp/gemini-review`に出力されます。
 
-手動で環境変数を設定することも可能：
+詳細ログを有効にする場合：
 
 ```bash
-export CC_GEN_REVIEW_TMP_DIR="/tmp/reviews"
 export CC_GEN_REVIEW_VERBOSE="true"
 ```
 
@@ -82,7 +81,6 @@ export CC_GEN_REVIEW_VERBOSE="true"
 | オプション | 説明 |
 |-----------|------|
 | `-c, --auto-claude-launch` | 自動でClaudeを起動 |
-| `-t, --tmp-dir DIR` | 一時ファイル領域を指定（デフォルト: ./tmp） |
 | `--think` | レビュー内容の後に'think'を追加 |
 | `-v, --verbose` | 詳細ログを出力 |
 | `-h, --help` | ヘルプを表示 |
@@ -91,8 +89,8 @@ export CC_GEN_REVIEW_VERBOSE="true"
 
 1. **hook-handler.sh**がClaude Codeのstop hookから呼び出される
 2. トランスクリプトファイルから最新の作業内容を抽出
-3. Geminiでレビューを実行し、結果を`gemini-review`ファイルに保存
-4. **cc-gen-review.sh**が`gemini-review`ファイルを監視
+3. Geminiでレビューを実行し、結果を`/tmp/gemini-review`に保存
+4. **cc-gen-review.sh**が`/tmp/gemini-review`ファイルを監視
 5. ファイルの更新を検出したら、tmuxセッションに内容を送信
 6. Claudeが自動的にレビュー内容を受け取る
 

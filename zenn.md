@@ -86,7 +86,7 @@ summary=$(jq -r 'select(.type == "assistant")' "$transcript_path" | \
 # Geminiでレビュー
 review_result=$(echo "$summary" | gemini -p "作業内容をレビューしてください")
 
-# レビュー結果を一時ファイルに保存
+# レビュー結果を固定ファイルに保存
 echo "$review_result" > "/tmp/gemini-review"
 ```
 
@@ -178,7 +178,7 @@ chmod +x *.sh
 }
 ```
 
-**重要**: hook-handlerはcc-gen-reviewが設定した環境変数を使用するため、cc-gen-reviewを起動してからClaude Codeを使用してください。
+レビューファイルは固定で`/tmp/gemini-review`に出力されます。
 
 ## 3. 起動
 
@@ -204,7 +204,7 @@ Auto-launch Claude: true
 =============================
 
 ✓ tmux session 'claude' is ready
-✓ Watching for review file: ./tmp/gemini-review
+✓ Watching for review file: /tmp/gemini-review
 
 To attach to the session, run:
   tmux attach-session -t claude
@@ -216,9 +216,9 @@ Press Ctrl+C to stop watching...
 
 手順：
 
-1. cc-gen-reviewを起動（環境変数を設定）：
+1. cc-gen-reviewを起動：
 ```bash
-./cc-gen-review.sh --tmp-dir /tmp/reviews -c claude
+./cc-gen-review.sh -c claude
 ```
 
 2. 別ターミナルでtmuxセッションにアタッチ：

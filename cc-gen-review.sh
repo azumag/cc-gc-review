@@ -7,7 +7,7 @@ set -euo pipefail
 # デフォルト値
 SESSION_NAME=""
 AUTO_CLAUDE_LAUNCH=false
-TMP_DIR="./tmp"
+TMP_DIR="/tmp"
 THINK_MODE=false
 VERBOSE=false
 
@@ -32,14 +32,13 @@ Claude Code と Gemini を stop hook 連携させるサポートツール
 
 Options:
     -c, --auto-claude-launch 自動でClaudeを起動
-    -t, --tmp-dir DIR        一時ファイル領域を指定 (default: ./tmp)
     --think                  レビュー内容の後に'think'を追加
     -v, --verbose            詳細ログを出力
     -h, --help               このヘルプを表示
 
 Example:
     $0 -c claude
-    $0 --tmp-dir /tmp/reviews claude-session
+    $0 --think --verbose claude-session
 EOF
 }
 
@@ -50,10 +49,6 @@ parse_args() {
             -c|--auto-claude-launch)
                 AUTO_CLAUDE_LAUNCH=true
                 shift
-                ;;
-            -t|--tmp-dir)
-                TMP_DIR="$2"
-                shift 2
                 ;;
             --think)
                 THINK_MODE=true
@@ -101,18 +96,6 @@ setup_tmux_session() {
 }
 
 
-# 一時ディレクトリのセットアップ
-setup_tmp_dir() {
-    if [[ ! -d "$TMP_DIR" ]]; then
-        if [[ "$TMP_DIR" == "./tmp" ]] && [[ ! -d "./tmp" ]]; then
-            TMP_DIR="/tmp"
-            log "Using /tmp as temporary directory"
-        else
-            mkdir -p "$TMP_DIR"
-            log "Created temporary directory: $TMP_DIR"
-        fi
-    fi
-}
 
 # レビュー結果をtmuxに送信
 send_review_to_tmux() {
@@ -145,7 +128,7 @@ think"
 # ファイル監視
 watch_review_files() {
     local session="$1"
-    local watch_file="$TMP_DIR/gemini-review"
+    local watch_file="/tmp/gemini-review"
     
     log "Starting file watch on: $watch_file"
     
@@ -167,7 +150,7 @@ watch_with_inotify() {
     log "Using inotifywait for file monitoring"
     
     while true; do
-        inotifywait -e modify,create "$TMP_DIR" 2>/dev/null | while read -r dir event file; do
+        inotifywait -e modify,create "/tmp" 2>/dev/null | while read -r dir event file; do
             if [[ "$file" == "gemini-review" ]]; then
                 local filepath="$dir$file"
                 log "Detected change in: $filepath"
@@ -253,13 +236,9 @@ trap cleanup INT TERM
 main() {
     parse_args "$@"
     
-    # hook-handlerと設定を共有するために環境変数を設定
-    export CC_GEN_REVIEW_TMP_DIR="$TMP_DIR"
-    export CC_GEN_REVIEW_VERBOSE="$VERBOSE"
-    
     echo "=== cc-gen-review starting ==="
     echo "Session name: $SESSION_NAME"
-    echo "Tmp directory: $TMP_DIR"
+    echo "Review file: $TMP_DIR/gemini-review"
     echo "Think mode: $THINK_MODE"
     echo "Auto-launch Claude: $AUTO_CLAUDE_LAUNCH"
     echo "============================="
@@ -268,9 +247,6 @@ main() {
     
     # tmuxセッションのセットアップ
     setup_tmux_session "$SESSION_NAME"
-    
-    # 一時ディレクトリのセットアップ
-    setup_tmp_dir
     
     echo ""
     echo "✓ tmux session '$SESSION_NAME' is ready"

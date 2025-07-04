@@ -5,9 +5,8 @@
 set -euo pipefail
 
 # 設定
-TMP_DIR="${CC_GEN_REVIEW_TMP_DIR:-./tmp}"
+TMP_DIR="/tmp"
 VERBOSE="${CC_GEN_REVIEW_VERBOSE:-false}"
-REVIEW_FILE_PREFIX="gemini-review"
 
 # ログ関数
 log() {
@@ -21,17 +20,6 @@ error() {
     exit 1
 }
 
-# 一時ディレクトリの準備
-setup_tmp_dir() {
-    if [[ ! -d "$TMP_DIR" ]]; then
-        if [[ "$TMP_DIR" == "./tmp" ]] && [[ ! -d "./tmp" ]]; then
-            TMP_DIR="/tmp"
-        else
-            mkdir -p "$TMP_DIR"
-        fi
-    fi
-    log "Using temporary directory: $TMP_DIR"
-}
 
 # 作業サマリーの取得
 get_work_summary() {
@@ -114,15 +102,12 @@ main() {
         exit 0
     fi
     
-    # 一時ディレクトリのセットアップ
-    setup_tmp_dir
-    
     # 作業サマリーの取得
     local work_summary=$(get_work_summary "$transcript_path")
     log "Work summary extracted (${#work_summary} characters)"
     
-    # レビューファイル名の生成（単純化）
-    local review_file="$TMP_DIR/gemini-review"
+    # レビューファイル名の生成（固定）
+    local review_file="/tmp/gemini-review"
     
     # Geminiレビューの実行
     run_gemini_review "$work_summary" "$review_file"
