@@ -6,7 +6,6 @@ set -euo pipefail
 
 # デフォルト値
 SESSION_NAME=""
-AUTO_ATTACH=false
 AUTO_CLAUDE_LAUNCH=false
 TMP_DIR="./tmp"
 THINK_MODE=false
@@ -32,7 +31,6 @@ Usage: $0 [OPTIONS] SESSION_NAME
 Claude Code と Gemini を stop hook 連携させるサポートツール
 
 Options:
-    -a, --auto-attach        自動でtmuxセッションをアタッチ
     -c, --auto-claude-launch 自動でClaudeを起動
     -t, --tmp-dir DIR        一時ファイル領域を指定 (default: ./tmp)
     --think                  レビュー内容の後に'think'を追加
@@ -40,7 +38,7 @@ Options:
     -h, --help               このヘルプを表示
 
 Example:
-    $0 -a -c claude
+    $0 -c claude
     $0 --tmp-dir /tmp/reviews claude-session
 EOF
 }
@@ -49,10 +47,6 @@ EOF
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -a|--auto-attach)
-                AUTO_ATTACH=true
-                shift
-                ;;
             -c|--auto-claude-launch)
                 AUTO_CLAUDE_LAUNCH=true
                 shift
@@ -104,12 +98,8 @@ setup_tmux_session() {
     else
         log "Using existing tmux session: $session"
     fi
-    
-    if [[ "$AUTO_ATTACH" == true ]]; then
-        log "Attaching to tmux session: $session"
-        tmux attach-session -t "$session" &
-    fi
 }
+
 
 # 一時ディレクトリのセットアップ
 setup_tmp_dir() {
@@ -255,6 +245,8 @@ main() {
     
     # 一時ディレクトリのセットアップ
     setup_tmp_dir
+    
+    log "Session created. You can attach with: tmux attach-session -t $SESSION_NAME"
     
     # ファイル監視開始
     watch_review_files "$SESSION_NAME"

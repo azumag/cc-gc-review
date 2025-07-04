@@ -38,11 +38,8 @@ chmod +x *.sh
 # 基本的な使い方
 ./cc-gen-review.sh claude
 
-# 自動でtmuxセッションをアタッチ
-./cc-gen-review.sh -a claude
-
 # 自動でClaudeも起動
-./cc-gen-review.sh -a -c claude
+./cc-gen-review.sh -c claude
 
 # 一時ディレクトリを指定
 ./cc-gen-review.sh --tmp-dir /tmp/reviews claude
@@ -52,6 +49,11 @@ chmod +x *.sh
 
 # 詳細ログを表示
 ./cc-gen-review.sh -v claude
+```
+
+起動後、別のターミナルで以下を実行してセッションにアタッチ：
+```bash
+tmux attach-session -t claude
 ```
 
 ### 2. Claude Codeのhooks設定
@@ -77,7 +79,6 @@ export CC_GEN_REVIEW_VERBOSE="true"
 
 | オプション | 説明 |
 |-----------|------|
-| `-a, --auto-attach` | 自動でtmuxセッションをアタッチ |
 | `-c, --auto-claude-launch` | 自動でClaudeを起動 |
 | `-t, --tmp-dir DIR` | 一時ファイル領域を指定（デフォルト: ./tmp） |
 | `--think` | レビュー内容の後に'think'を追加 |
