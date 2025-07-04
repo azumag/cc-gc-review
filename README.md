@@ -63,12 +63,14 @@ tmux attach-session -t claude
 ```json
 {
   "hooks": {
-    "stop": "./path/to/cc-gen-review/hook-handler.sh"
+    "stop": "/path/to/cc-gen-review/hook-handler.sh"
   }
 }
 ```
 
-環境変数で動作をカスタマイズ：
+**重要**: hook-handlerはcc-gen-reviewが設定した環境変数を使用するため、cc-gen-reviewを起動してからClaude Codeを使用してください。
+
+手動で環境変数を設定することも可能：
 
 ```bash
 export CC_GEN_REVIEW_TMP_DIR="/tmp/reviews"

@@ -171,6 +171,8 @@ chmod +x *.sh
 }
 ```
 
+**重要**: hook-handlerはcc-gen-reviewが設定した環境変数を使用するため、cc-gen-reviewを起動してからClaude Codeを使用してください。
+
 ## 3. 起動
 
 ```bash
@@ -205,13 +207,19 @@ Press Ctrl+C to stop watching...
 
 ## 4. 使用例
 
-別ターミナルでtmuxセッションにアタッチ：
+手順：
 
+1. cc-gen-reviewを起動（環境変数を設定）：
+```bash
+./cc-gen-review.sh --tmp-dir /tmp/reviews -c claude
+```
+
+2. 別ターミナルでtmuxセッションにアタッチ：
 ```bash
 tmux attach-session -t claude
 ```
 
-Claude Codeで作業を行い、終了すると自動的にレビューが実行されます。
+3. Claude Codeで作業を行い、終了すると自動的にレビューが実行されます。
 
 # 技術的な工夫点
 

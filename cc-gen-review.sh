@@ -239,6 +239,10 @@ trap cleanup INT TERM
 main() {
     parse_args "$@"
     
+    # hook-handlerと設定を共有するために環境変数を設定
+    export CC_GEN_REVIEW_TMP_DIR="$TMP_DIR"
+    export CC_GEN_REVIEW_VERBOSE="$VERBOSE"
+    
     echo "=== cc-gen-review starting ==="
     echo "Session name: $SESSION_NAME"
     echo "Tmp directory: $TMP_DIR"
