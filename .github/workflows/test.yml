@@ -1,0 +1,179 @@
+name: Shell Script Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        shell: [bash]
+        
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tmux jq coreutils
+        
+    - name: Install bats-core
+      run: |
+        git clone https://github.com/bats-core/bats-core.git
+        cd bats-core
+        sudo ./install.sh /usr/local
+        
+    - name: Verify bats installation
+      run: |
+        bats --version
+        which bats
+        
+    - name: Install bats helpers
+      run: |
+        git clone https://github.com/bats-core/bats-support.git test/test_helper/bats-support
+        git clone https://github.com/bats-core/bats-assert.git test/test_helper/bats-assert
+        
+    - name: Make scripts executable
+      run: |
+        chmod +x *.sh
+        chmod +x test/*.sh
+        
+    - name: Run test setup
+      run: |
+        cd test
+        ./setup_test.sh
+        
+    - name: Run all tests
+      run: |
+        cd test
+        ./run_tests.sh --verbose
+        
+    - name: Run specific test suites
+      run: |
+        cd test
+        echo "Running cc-gen-review tests..."
+        ./run_tests.sh --file test_cc_gen_review.bats --verbose
+        echo "Running hook-handler tests..."
+        ./run_tests.sh --file test_hook_handler.bats --verbose
+        
+    - name: Test with different shell configurations
+      run: |
+        # Test with minimal PATH
+        export PATH="/usr/bin:/bin"
+        cd test
+        ./run_tests.sh --test "should handle.*not available" --verbose
+        
+    - name: Cleanup test environment
+      if: always()
+      run: |
+        # Kill any remaining tmux sessions
+        tmux list-sessions 2>/dev/null | grep "test-claude" | cut -d: -f1 | xargs -I {} tmux kill-session -t {} 2>/dev/null || true
+        # Clean up test files
+        rm -rf ./test-tmp-* 2>/dev/null || true
+        rm -f /tmp/gemini-review* 2>/dev/null || true
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install ShellCheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+        
+    - name: Run ShellCheck on shell scripts
+      run: |
+        find . -name "*.sh" -not -path "./test-tmp-*" -not -path "./.git/*" | xargs shellcheck -S warning
+        
+    - name: Run ShellCheck on bats files
+      run: |
+        find test -name "*.bats" | xargs shellcheck -S warning
+        
+    - name: Check script executability
+      run: |
+        [ -x cc-gen-review.sh ] || (echo "cc-gen-review.sh is not executable" && exit 1)
+        [ -x hook-handler.sh ] || (echo "hook-handler.sh is not executable" && exit 1)
+        [ -x test/run_tests.sh ] || (echo "test/run_tests.sh is not executable" && exit 1)
+        [ -x test/setup_test.sh ] || (echo "test/setup_test.sh is not executable" && exit 1)
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Run bandit security scan
+      run: |
+        # Install bandit for shell script security scanning
+        pip install bandit
+        
+        # Check for common security issues in shell scripts
+        find . -name "*.sh" -not -path "./test-tmp-*" -not -path "./.git/*" -exec grep -l "eval\|exec\|system\|rm -rf" {} \; | while read -r file; do
+          echo "Security review needed for: $file"
+          grep -n "eval\|exec\|system\|rm -rf" "$file" || true
+        done
+        
+    - name: Check for hardcoded secrets
+      run: |
+        # Check for potential hardcoded secrets
+        find . -name "*.sh" -not -path "./test-tmp-*" -not -path "./.git/*" -exec grep -i "password\|secret\|key\|token" {} \; | grep -v "# " | head -10 || true
+        
+    - name: Verify file permissions
+      run: |
+        # Check that script files have appropriate permissions
+        find . -name "*.sh" -not -path "./test-tmp-*" -not -path "./.git/*" -exec ls -la {} \;
+
+  compatibility:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tmux jq coreutils
+        
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install tmux jq coreutils
+        
+    - name: Install bats-core
+      run: |
+        git clone https://github.com/bats-core/bats-core.git
+        cd bats-core
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          sudo ./install.sh /usr/local
+        else
+          ./install.sh /usr/local
+        fi
+        
+    - name: Test script compatibility
+      run: |
+        cd test
+        chmod +x setup_test.sh run_tests.sh
+        ./setup_test.sh
+        
+    - name: Run basic compatibility tests
+      run: |
+        cd test
+        # Run a subset of tests to verify compatibility
+        ./run_tests.sh --test "help.*display" --verbose
+        ./run_tests.sh --test "should fail when no session name" --verbose

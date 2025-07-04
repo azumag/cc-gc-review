@@ -33,7 +33,7 @@ Claude Codeには、特定のイベント時にカスタムスクリプトを実
 ```json
 {
   "hooks": {
-    "stop": "/path/to/hook-handler.sh"
+    "stop": "/path/to/hook-handler.sh --git-diff --yolo"
   }
 }
 ```
@@ -83,8 +83,8 @@ fi
 summary=$(jq -r 'select(.type == "assistant")' "$transcript_path" | \
          jq -sr '.[-1].message.content[-1].text')
 
-# Geminiでレビュー
-review_result=$(echo "$summary" | gemini -p "作業内容をレビューしてください")
+# Geminiでレビュー（サンドボックスモード + yoloモード）
+review_result=$(echo "$summary" | gemini -p -s -y "作業内容をレビューしてください")
 
 # レビュー結果を固定ファイルに保存
 echo "$review_result" > "/tmp/gemini-review"
@@ -173,12 +173,32 @@ chmod +x *.sh
 ```json
 {
   "hooks": {
-    "stop": "/path/to/cc-gen-review/hook-handler.sh"
+    "stop": "/path/to/cc-gen-review/hook-handler.sh --git-diff --yolo"
   }
 }
 ```
 
 レビューファイルは固定で`/tmp/gemini-review`に出力されます。
+
+### hook-handler.shのオプション
+
+hook-handler.shでは以下のオプションを使用できます：
+
+| オプション | 説明 |
+|-----------|------|
+| `--git-diff` | Geminiに「git diffを実行して作業ファイルの変更内容を把握する」指示を追加 |
+| `--yolo`, `-y` | Geminiをyoloモード（-y）で実行 |
+
+**注意**: `--git-diff`オプションを使用すると、自動的に`--yolo`モードも有効になります。これはGeminiがgit diffを実行する際に確認プロンプトを表示させないためです。
+
+基本的な設定（git diffなし）：
+```json
+{
+  "hooks": {
+    "stop": "/path/to/cc-gen-review/hook-handler.sh"
+  }
+}
+```
 
 ## 3. 起動
 
@@ -195,6 +215,12 @@ chmod +x *.sh
 # カスタムコマンド付き（レビュー先頭に/refactorを付加）
 ./cc-gen-review.sh --custom-command "refactor" claude
 
+# レビュー数を制限
+./cc-gen-review.sh --max-reviews 10 claude
+
+# 無制限にレビュー
+./cc-gen-review.sh --infinite-review claude
+
 # オプション組み合わせ
 ./cc-gen-review.sh --think --custom-command "optimize" -c -v claude
 ```
@@ -208,6 +234,7 @@ Review file: /tmp/gemini-review
 Think mode: true
 Auto-launch Claude: true
 Custom command: /optimize
+Review limit: 4
 =============================
 
 ✓ tmux session 'claude' is ready
@@ -239,13 +266,42 @@ tmux attach-session -t claude
 
 ## 1. 無限ループの防止
 
-stop hookから新たな入力があると、それがまたstop hookを発動させる可能性があります。これを防ぐため、`stop_hook_active`フラグをチェックしています。
+stop hookから新たな入力があると、それがまたstop hookを発動させる可能性があります。cc-gen-reviewでは複数の仕組みで無限ループを防止しています：
 
+### 基本的な防止機能
 ```bash
 if [[ "$stop_hook_active" == "true" ]]; then
     exit 0
 fi
 ```
+
+### レビュー数制限
+デフォルトで4回までレビューを実行し、それ以上は自動停止します：
+
+```bash
+# レビュー数を制限（デフォルト: 4回）
+./cc-gen-review.sh claude
+
+# 制限を変更
+./cc-gen-review.sh --max-reviews 10 claude
+
+# 制限を無効化
+./cc-gen-review.sh --infinite-review claude
+```
+
+### インタラクティブ確認
+各レビュー後に「続行します」と表示され、10秒以内に「n」を入力すると停止します：
+
+```
+📝 Review received (1250 characters)
+📤 Sending review to tmux session: claude
+✅ Review sent successfully
+
+続行します (10秒以内に 'n' を入力すると停止): 
+```
+
+### カウントファイル管理
+`/tmp/cc-gen-review-count`でレビュー数を追跡し、新しいファイル更新時にリセットされます。
 
 ## 2. 複数のファイル監視方式
 
@@ -314,10 +370,13 @@ think
 ```
 🔔 New review detected via polling!
 📝 Review received (1250 characters)
+📊 Review count: 3/4
 ⚡ Custom command enabled - prepending '/refactor'
 🤔 Think mode enabled - appending 'think' command
 📤 Sending review to tmux session: claude
 ✅ Review sent successfully
+
+続行します (10秒以内に 'n' を入力すると停止): 
 ```
 
 # カスタマイズ
@@ -401,6 +460,7 @@ cc-gen-reviewを使うことで、Claude Codeでの開発中に自動的にGemin
 
 - **カスタムコマンド**: 特定の作業モードに自動切り替え
 - **Thinkモード**: より深い考察を促進
+- **無限ループ防止**: レビュー数制限とインタラクティブ確認
 - **詳細ログ**: 動作状況の可視化
 - **シンプルな設定**: `/tmp/gemini-review`固定でお手軽導入
 

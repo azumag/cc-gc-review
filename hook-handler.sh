@@ -7,6 +7,8 @@ set -euo pipefail
 # 設定
 TMP_DIR="/tmp"
 VERBOSE="${CC_GEN_REVIEW_VERBOSE:-false}"
+GIT_DIFF_MODE=false
+YOLO_MODE=false
 
 # ログ関数
 log() {
@@ -49,8 +51,16 @@ run_gemini_review() {
     log "Running Gemini review..."
     
     # Geminiプロンプトの作成
-    local prompt="作業内容をレビューして、改善点や注意点があれば日本語で簡潔に指摘してください。良い点も含めてフィードバックをお願いします。
-    対象ディレクトリが git 管理されている場合は、git diff を行なって, さらに作業内容を把握してください。
+    local prompt="作業内容をレビューして、改善点や注意点があれば日本語で簡潔に指摘してください。良い点も含めてフィードバックをお願いします。"
+    
+    # --git-diffオプションが指定されている場合は追加の指示を含める
+    if [[ "$GIT_DIFF_MODE" == "true" ]]; then
+        prompt="$prompt
+
+重要: 自分でgit diffを実行して作業ファイルの具体的な変更内容も把握してからレビューを行ってください。"
+    fi
+    
+    prompt="$prompt
 
 作業内容:
 $summary
@@ -60,7 +70,11 @@ $summary
     # gemini-cliを使用してレビューを実行
     if command -v gemini >/dev/null 2>&1; then
         # gemini-cliがインストールされている場合
-        local review_result=$(echo "$prompt" | gemini -p 2>/dev/null || echo "Geminiレビューの実行に失敗しました。")
+        local gemini_options="-p -s"
+        if [[ "$YOLO_MODE" == "true" ]]; then
+            gemini_options="$gemini_options -y"
+        fi
+        local review_result=$(echo "$prompt" | gemini $gemini_options 2>/dev/null || echo "Geminiレビューの実行に失敗しました。")
     else
         # gemini-cliがない場合は代替処理
         log "Warning: gemini command not found, using placeholder review"
@@ -72,9 +86,36 @@ $summary
     log "Review result written to: $output_file"
 }
 
+# オプション解析
+parse_options() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --git-diff)
+                GIT_DIFF_MODE=true
+                YOLO_MODE=true  # --git-diffが指定された場合は自動的にYOLOモードも有効
+                shift
+                ;;
+            --yolo|-y)
+                YOLO_MODE=true
+                shift
+                ;;
+            *)
+                # 不明なオプションは無視
+                shift
+                ;;
+        esac
+    done
+    
+    log "GIT_DIFF_MODE: $GIT_DIFF_MODE"
+    log "YOLO_MODE: $YOLO_MODE"
+}
+
 # メイン処理
 main() {
     log "Hook handler started"
+    
+    # オプション解析
+    parse_options "$@"
     
     # 現在のディレクトリを取得（Claude Codeの作業ディレクトリ）
     local working_dir=$(pwd)

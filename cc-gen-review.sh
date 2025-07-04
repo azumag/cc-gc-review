@@ -12,6 +12,9 @@ THINK_MODE=false
 VERBOSE=false
 CUSTOM_COMMAND=""
 RESEND_EXISTING=false
+MAX_REVIEWS=4
+INFINITE_REVIEW=false
+REVIEW_COUNT_FILE="/tmp/cc-gen-review-count"
 
 # ログ関数
 log() {
@@ -37,6 +40,8 @@ Options:
     --think                     レビュー内容の後に'think'を追加
     --custom-command COMMAND    レビュー内容の先頭にカスタムコマンドを付加 (例: --custom-command "refactor" → /refactor)
     --resend                    起動時に既存のレビューファイルがあれば再送信
+    --max-reviews N             レビュー数の上限を設定 (デフォルト: 4)
+    --infinite-review           レビュー数の制限を無効化
     -v, --verbose               詳細ログを出力
     -h, --help                  このヘルプを表示
 
@@ -44,6 +49,8 @@ Example:
     $0 -c claude
     $0 --think --verbose claude-session
     $0 --custom-command "refactor" claude
+    $0 --max-reviews 10 claude
+    $0 --infinite-review claude
 EOF
 }
 
@@ -60,11 +67,25 @@ parse_args() {
                 shift
                 ;;
             --custom-command)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    error "--custom-command requires a command argument"
+                fi
                 CUSTOM_COMMAND="$2"
                 shift 2
                 ;;
             --resend)
                 RESEND_EXISTING=true
+                shift
+                ;;
+            --max-reviews)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    error "--max-reviews requires a number argument"
+                fi
+                MAX_REVIEWS="$2"
+                shift 2
+                ;;
+            --infinite-review)
+                INFINITE_REVIEW=true
                 shift
                 ;;
             -v|--verbose)
@@ -115,6 +136,27 @@ send_review_to_tmux() {
     local session="$1"
     local review_content="$2"
     
+    # レビュー数制限チェック
+    if [[ "$INFINITE_REVIEW" == false ]]; then
+        local current_count=0
+        if [[ -f "$REVIEW_COUNT_FILE" ]]; then
+            current_count=$(cat "$REVIEW_COUNT_FILE" 2>/dev/null || echo "0")
+        fi
+        
+        if [[ "$current_count" -ge "$MAX_REVIEWS" ]]; then
+            echo "🚫 Review limit reached ($current_count/$MAX_REVIEWS). Stopping review loop."
+            echo "   To continue, either:"
+            echo "   1. Use --infinite-review option"
+            echo "   2. Increase limit with --max-reviews N"
+            echo "   3. Remove count file: rm $REVIEW_COUNT_FILE"
+            return 1
+        fi
+        
+        # レビューカウントを更新
+        echo $((current_count + 1)) > "$REVIEW_COUNT_FILE"
+        echo "📊 Review count: $((current_count + 1))/$MAX_REVIEWS"
+    fi
+    
     echo "📝 Review received (${#review_content} characters)"
     
     # thinkモードの場合はレビュー内容の末尾に追加
@@ -148,6 +190,39 @@ $review_content"
     tmux send-keys -t "$session" "" Enter
 
     echo "✅ Review sent successfully"
+    
+    # ユーザーの続行確認を求める
+    prompt_for_continuation
+    local continuation_result=$?
+    
+    if [[ $continuation_result -eq 2 ]]; then
+        # ユーザーが停止を選択した場合
+        return 2
+    fi
+    
+    return 0
+}
+
+# ユーザーの続行確認を求める（10秒タイムアウト付き）
+prompt_for_continuation() {
+    echo "続行します"
+    echo "停止するには 'n' を入力してください (10秒後に自動で続行):"
+    
+    local input=""
+    if read -t 10 -r input; then
+        # ユーザーが何か入力した場合
+        if [[ "$input" == "n" || "$input" == "N" ]]; then
+            echo "❌ ユーザーによりレビューループを停止しました"
+            return 2  # 停止を意味する特別な終了コード
+        else
+            echo "▶️  続行します"
+            return 0  # 続行
+        fi
+    else
+        # タイムアウトした場合（10秒経過）
+        echo "▶️  タイムアウトしました。続行します"
+        return 0  # 続行
+    fi
 }
 
 # ファイル監視
@@ -165,6 +240,15 @@ watch_review_files() {
             if [[ -n "$content" ]]; then
                 echo "🔄 Resending existing review file..."
                 send_review_to_tmux "$session" "$content"
+                local send_result=$?
+                
+                if [[ $send_result -eq 1 ]]; then
+                    echo "⚠️  Review limit reached during resend. Exiting."
+                    exit 1
+                elif [[ $send_result -eq 2 ]]; then
+                    echo "👋 Exiting by user request during resend."
+                    exit 0
+                fi
             fi
         else
             log "Existing review file found, ignoring (use --resend to send)"
@@ -199,7 +283,23 @@ watch_with_inotify() {
                     local content=$(cat "$filepath")
                     if [[ -n "$content" ]]; then
                         echo "🔔 New review detected via inotifywait!"
+                        
+                        # レビューカウントファイルをリセット（新しいファイル更新時）
+                        if [[ -f "$REVIEW_COUNT_FILE" ]]; then
+                            rm "$REVIEW_COUNT_FILE"
+                            echo "🔄 Review count reset due to new file update"
+                        fi
+                        
                         send_review_to_tmux "$session" "$content"
+                        local send_result=$?
+                        
+                        if [[ $send_result -eq 1 ]]; then
+                            echo "⚠️  Review limit reached. Exiting watch mode."
+                            exit 1
+                        elif [[ $send_result -eq 2 ]]; then
+                            echo "👋 Exiting watch mode by user request."
+                            exit 0
+                        fi
                     else
                         log "Warning: File exists but content is empty"
                     fi
@@ -223,7 +323,23 @@ watch_with_fswatch() {
             local content=$(cat "$filepath")
             if [[ -n "$content" ]]; then
                 echo "🔔 New review detected via fswatch!"
+                
+                # レビューカウントファイルをリセット（新しいファイル更新時）
+                if [[ -f "$REVIEW_COUNT_FILE" ]]; then
+                    rm "$REVIEW_COUNT_FILE"
+                    echo "🔄 Review count reset due to new file update"
+                fi
+                
                 send_review_to_tmux "$session" "$content"
+                local send_result=$?
+                
+                if [[ $send_result -eq 1 ]]; then
+                    echo "⚠️  Review limit reached. Exiting watch mode."
+                    exit 1
+                elif [[ $send_result -eq 2 ]]; then
+                    echo "👋 Exiting watch mode by user request."
+                    exit 0
+                fi
             else
                 log "Warning: File exists but content is empty"
             fi
@@ -258,7 +374,23 @@ watch_with_polling() {
                 if [[ -n "$content" ]]; then
                     echo "🔔 New review detected via polling!"
                     log "Sending review content (${#content} chars) to session: $session"
+                    
+                    # レビューカウントファイルをリセット（新しいファイル更新時）
+                    if [[ -f "$REVIEW_COUNT_FILE" ]]; then
+                        rm "$REVIEW_COUNT_FILE"
+                        echo "🔄 Review count reset due to new file update"
+                    fi
+                    
                     send_review_to_tmux "$session" "$content"
+                    local send_result=$?
+                    
+                    if [[ $send_result -eq 1 ]]; then
+                        echo "⚠️  Review limit reached. Exiting watch mode."
+                        exit 1
+                    elif [[ $send_result -eq 2 ]]; then
+                        echo "👋 Exiting watch mode by user request."
+                        exit 0
+                    fi
                 else
                     log "Warning: File exists but content is empty"
                 fi
@@ -288,6 +420,11 @@ main() {
     echo "Resend existing: $RESEND_EXISTING"
     if [[ -n "$CUSTOM_COMMAND" ]]; then
         echo "Custom command: /$CUSTOM_COMMAND"
+    fi
+    if [[ "$INFINITE_REVIEW" == true ]]; then
+        echo "Review limit: unlimited"
+    else
+        echo "Review limit: $MAX_REVIEWS"
     fi
     echo "============================="
     

@@ -1,0 +1,104 @@
+repos:
+  # Shell script linting with ShellCheck
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [-S, warning]
+        files: \.(sh|bash)$
+        exclude: ^test-tmp-.*$
+
+  # Shell script formatting with shfmt
+  - repo: https://github.com/pre-commit/mirrors-shfmt
+    rev: v3.8.0
+    hooks:
+      - id: shfmt
+        args: [-w, -s, -i, '4']
+        files: \.(sh|bash)$
+        exclude: ^test-tmp-.*$
+
+  # Bats test files linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: shellcheck-bats
+        args: [-S, warning]
+        files: \.bats$
+        exclude: ^test-tmp-.*$
+
+  # Run shell script tests before commit
+  - repo: local
+    hooks:
+      - id: shell-tests
+        name: Run shell script tests
+        entry: ./test/run_tests.sh
+        language: script
+        pass_filenames: false
+        always_run: false
+        files: \.(sh|bash|bats)$
+        exclude: ^test-tmp-.*$
+        stages: [commit]
+
+  # Check for common security issues
+  - repo: local
+    hooks:
+      - id: shell-security-check
+        name: Shell security check
+        entry: bash
+        language: script
+        args:
+          - -c
+          - |
+            echo "Checking for potential security issues in shell scripts..."
+            if grep -r "eval\|rm -rf /\|chmod 777" --include="*.sh" --include="*.bash" .; then
+              echo "WARNING: Potential security issues found!"
+              echo "Please review the above matches carefully."
+              exit 1
+            fi
+            echo "No obvious security issues found."
+        pass_filenames: false
+        files: \.(sh|bash)$
+        exclude: ^test-tmp-.*$
+
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^test-tmp-.*$
+      - id: end-of-file-fixer
+        exclude: ^test-tmp-.*$
+      - id: check-yaml
+        exclude: ^test-tmp-.*$
+      - id: check-json
+        exclude: ^test-tmp-.*$
+      - id: check-added-large-files
+        exclude: ^test-tmp-.*$
+      - id: check-executables-have-shebangs
+        exclude: ^test-tmp-.*$
+      - id: check-shebang-scripts-are-executable
+        exclude: ^test-tmp-.*$
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.41.0
+    hooks:
+      - id: markdownlint
+        args: [--fix]
+        exclude: ^test-tmp-.*$
+
+  # Git hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-merge-conflict
+        exclude: ^test-tmp-.*$
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+        exclude: ^test-tmp-.*$
+
+# Additional configuration
+default_stages: [commit, push]
+fail_fast: false
+minimum_pre_commit_version: '2.20.0'

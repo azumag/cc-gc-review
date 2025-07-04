@@ -58,6 +58,12 @@ chmod +x *.sh
 
 # 起動時に既存のレビューファイルを再送信
 ./cc-gen-review.sh --resend claude
+
+# レビュー数を制限
+./cc-gen-review.sh --max-reviews 10 claude
+
+# 無制限にレビュー
+./cc-gen-review.sh --infinite-review claude
 ```
 
 起動後、別のターミナルで以下を実行してセッションにアタッチ：
@@ -72,10 +78,28 @@ tmux attach-session -t claude
 ```json
 {
   "hooks": {
+    "stop": "/path/to/cc-gen-review/hook-handler.sh --git-diff --yolo"
+  }
+}
+```
+
+基本的な設定（git diffなし）：
+```json
+{
+  "hooks": {
     "stop": "/path/to/cc-gen-review/hook-handler.sh"
   }
 }
 ```
+
+#### hook-handler.shのオプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--git-diff` | Geminiに「git diffを実行して作業ファイルの変更内容を把握する」指示を追加 |
+| `--yolo`, `-y` | Geminiをyoloモード（-y）で実行 |
+
+**注意**: `--git-diff`オプションを使用すると、自動的に`--yolo`モードも有効になります。これはGeminiがgit diffを実行する際に確認プロンプトを表示させないためです。
 
 レビューファイルは固定で`/tmp/gemini-review`に出力されます。
 
@@ -93,6 +117,8 @@ export CC_GEN_REVIEW_VERBOSE="true"
 | `--think` | レビュー内容の後に'think'を追加 |
 | `--custom-command COMMAND` | レビュー内容の先頭にカスタムコマンド（/COMMAND）を付加 |
 | `--resend` | 起動時に既存のレビューファイルがあれば再送信 |
+| `--max-reviews N` | レビュー数の上限を設定（デフォルト: 4） |
+| `--infinite-review` | レビュー数の制限を無効化 |
 | `-v, --verbose` | 詳細ログを出力 |
 | `-h, --help` | ヘルプを表示 |
 
@@ -142,7 +168,18 @@ tmux list-sessions  # 既存のセッションを確認
 
 ### 無限ループの防止
 
-hook-handler.shは`stop_hook_active`フラグをチェックして、既にstop hookが実行中の場合は処理をスキップします。
+複数の仕組みで無限ループを防止しています：
+
+1. **hook-handler.sh**は`stop_hook_active`フラグをチェックして、既にstop hookが実行中の場合は処理をスキップします。
+2. **レビュー数制限**: デフォルトで4回までレビューを実行し、それ以上は自動停止します。
+3. **インタラクティブ確認**: 各レビュー後に「続行します」と表示され、10秒以内に「n」を入力すると停止します。
+4. **カウントファイル**: `/tmp/cc-gen-review-count`でレビュー数を追跡し、新しいファイル更新時にリセットされます。
+
+#### 無限ループ防止のオプション
+
+- `--max-reviews N`: レビュー数の上限を設定（デフォルト: 4）
+- `--infinite-review`: レビュー数の制限を無効化
+- レビュー後の確認プロンプト: 10秒以内に「n」で停止、それ以外は継続
 
 ## ライセンス
 
