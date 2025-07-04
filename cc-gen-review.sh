@@ -238,6 +238,13 @@ trap cleanup INT TERM
 main() {
     parse_args "$@"
     
+    echo "=== cc-gen-review starting ==="
+    echo "Session name: $SESSION_NAME"
+    echo "Tmp directory: $TMP_DIR"
+    echo "Think mode: $THINK_MODE"
+    echo "Auto-launch Claude: $AUTO_CLAUDE_LAUNCH"
+    echo "============================="
+    
     log "Starting cc-gen-review with session: $SESSION_NAME"
     
     # tmuxセッションのセットアップ
@@ -245,6 +252,16 @@ main() {
     
     # 一時ディレクトリのセットアップ
     setup_tmp_dir
+    
+    echo ""
+    echo "✓ tmux session '$SESSION_NAME' is ready"
+    echo "✓ Watching for review files in: $TMP_DIR/gemini-review-*"
+    echo ""
+    echo "To attach to the session, run:"
+    echo "  tmux attach-session -t $SESSION_NAME"
+    echo ""
+    echo "Press Ctrl+C to stop watching..."
+    echo ""
     
     log "Session created. You can attach with: tmux attach-session -t $SESSION_NAME"
     
