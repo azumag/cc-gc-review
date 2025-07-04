@@ -125,6 +125,13 @@ watch_with_polling() {
                 content=$(cat "$watch_file")
                 
                 if [[ -n "$content" ]]; then
+                    # thinkモードの場合は末尾に追加
+                    if [[ "$THINK_MODE" == true ]]; then
+                        content="${content}
+
+think"
+                    fi
+                    
                     # レビュー内容をtmuxに送信
                     tmux send-keys -t "$session" "$content" Enter
                     sleep 5

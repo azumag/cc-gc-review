@@ -119,6 +119,13 @@ send_review_to_tmux() {
     local session="$1"
     local review_content="$2"
     
+    # thinkモードの場合はレビュー内容の末尾に追加
+    if [[ "$THINK_MODE" == true ]]; then
+        review_content="${review_content}
+
+think"
+    fi
+    
     log "Sending review to tmux session: $session"
     
     # レビュー内容を送信
@@ -127,12 +134,6 @@ send_review_to_tmux() {
     # 5秒待ってから追加のEnterを送信
     sleep 5
     tmux send-keys -t "$session" "" Enter
-    
-    # thinkモードの場合
-    if [[ "$THINK_MODE" == true ]]; then
-        sleep 1
-        tmux send-keys -t "$session" "think" Enter
-    fi
 }
 
 # ファイル監視
