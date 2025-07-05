@@ -107,9 +107,12 @@ $summary
         
         # まずはProモデルで実行（標準出力と標準エラーを分離）
         log "Trying Gemini Pro model first..."
-        local temp_stdout=$(mktemp)
-        local temp_stderr=$(mktemp)
-        local start_time=$(date +%s)
+        local temp_stdout
+        temp_stdout=$(mktemp)
+        local temp_stderr
+        temp_stderr=$(mktemp)
+        local start_time
+        start_time=$(date +%s)
         
         # geminiプロセスをタイムアウト付きで実行（手動管理）
         local gemini_timeout=120  # 2分でタイムアウト
@@ -167,36 +170,26 @@ $summary
             ((content_count++))
         done
         
-        local review_result=$(cat "$temp_stdout" 2>/dev/null)
-        local error_output=$(cat "$temp_stderr" 2>/dev/null)
+        local review_result
+        review_result=$(cat "$temp_stdout" 2>/dev/null)
+        local error_output
+        error_output=$(cat "$temp_stderr" 2>/dev/null)
         
         # dotenvログを除去して実際のレビュー結果のみを抽出
         review_result=$(echo "$review_result" | grep -v "^\[dotenv@.*\] injecting env" | sed '/^$/d')
         
         # タイムアウトまたは実行失敗時の処理
         local is_rate_limit=false
-        if [[ $gemini_exit_code -eq 124 ]]; then
-            log "Gemini Pro model timed out after ${gemini_timeout} seconds"
-            # タイムアウトをレート制限として扱い、Flashモデルに切り替え
-            is_rate_limit=true
-        elif [[ -z "$review_result" ]] && [[ $gemini_exit_code -eq 0 ]]; then
-            log "Warning: No actual review content found after filtering dotenv logs"
-            
-            # 生の出力をログに記録（デバッグ用）
-            local raw_output=$(cat "$temp_stdout" 2>/dev/null)
-            log "Raw stdout content: $raw_output"
-            log "Raw stderr content: $error_output"
-            
-            log "Skipping review due to empty content"
-            return 1  # レビューファイルを作成しない
-        fi
         
         # 429エラー（レート制限）をチェック - 標準エラー出力とexit codeで判定
         # より包括的なレートリミットエラーパターンをチェック
         if [[ $gemini_exit_code -eq 124 ]]; then
-            # タイムアウト時はFlashモデルに切り替え（既にis_rate_limit=trueに設定済み）
+            log "Gemini Pro model timed out after ${gemini_timeout} seconds"
+            # タイムアウトをレート制限として扱い、Flashモデルに切り替え
+            is_rate_limit=true
             log "Timeout detected, will switch to Flash model"
-        elif [[ $gemini_exit_code -ne 0 ]]; then
+        elif [[ $gemini_exit_code -ne 0 ]] || [[ -z "$review_result" ]]; then
+            # exit code != 0 の場合、または exit code = 0 でもレビュー結果が空の場合にレート制限をチェック
             if [[ "$error_output" =~ "status 429" ]] || \
                [[ "$error_output" =~ "rateLimitExceeded" ]] || \
                [[ "$error_output" =~ "Quota exceeded" ]] || \
@@ -205,6 +198,17 @@ $summary
                [[ "$error_output" =~ "Gemini 2.5 Pro Requests" ]] || \
                [[ "$review_result" =~ "status 429" ]]; then
                 is_rate_limit=true
+                log "Rate limit detected in error output (exit code: $gemini_exit_code)"
+            elif [[ -z "$review_result" ]] && [[ $gemini_exit_code -eq 0 ]]; then
+                log "Warning: No actual review content found after filtering dotenv logs"
+                
+                # 生の出力をログに記録（デバッグ用）
+                local raw_output=$(cat "$temp_stdout" 2>/dev/null)
+                log "Raw stdout content: $raw_output"
+                log "Raw stderr content: $error_output"
+                
+                log "Skipping review due to empty content"
+                return 1  # レビューファイルを作成しない
             fi
         fi
         
@@ -214,7 +218,8 @@ $summary
             
             # Flashモデルで再実行
             gemini_options="$gemini_options --model=gemini-2.5-flash"
-            local flash_start_time=$(date +%s)
+            local flash_start_time
+            flash_start_time=$(date +%s)
             
             # Flashモデルもタイムアウト付きで実行（手動管理）
             log "Manual timeout management for Flash model execution (${gemini_timeout}s)"
@@ -372,17 +377,22 @@ main() {
     parse_options "$@"
     
     # 現在のディレクトリを取得（Claude Codeの作業ディレクトリ）
-    local working_dir=$(pwd)
+    local working_dir
+    working_dir=$(pwd)
     log "Working directory: $working_dir"
     
     # 標準入力からJSONを読み取る
-    local input=$(cat)
+    local input
+    input=$(cat)
     log "Received input: $input"
     
     # JSONパース
-    local session_id=$(echo "$input" | jq -r '.session_id' 2>/dev/null || echo "")
-    local transcript_path=$(echo "$input" | jq -r '.transcript_path' 2>/dev/null || echo "")
-    local stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active' 2>/dev/null || echo "false")
+    local session_id
+    session_id=$(echo "$input" | jq -r '.session_id' 2>/dev/null || echo "")
+    local transcript_path
+    transcript_path=$(echo "$input" | jq -r '.transcript_path' 2>/dev/null || echo "")
+    local stop_hook_active
+    stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active' 2>/dev/null || echo "false")
     
     # 必須パラメータのチェック
     if [[ -z "$transcript_path" ]]; then
@@ -405,7 +415,8 @@ main() {
     fi
     
     # 作業サマリーの取得
-    local work_summary=$(get_work_summary "$transcript_path")
+    local work_summary
+    work_summary=$(get_work_summary "$transcript_path")
     log "Work summary extracted (${#work_summary} characters)"
     
     # 作業サマリーが空の場合はレビューをスキップ
