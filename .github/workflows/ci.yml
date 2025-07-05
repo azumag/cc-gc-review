@@ -167,10 +167,10 @@ jobs:
         
         # Create a test transcript file
         mkdir -p /tmp/test-integration
-        cat > /tmp/test-integration/test-transcript.jsonl << 'EOF'
+        cat > /tmp/test-integration/test-transcript.jsonl << 'TRANSCRIPT_EOF'
         {"type": "user", "message": {"content": [{"text": "テスト用のユーザーリクエスト"}]}}
         {"type": "assistant", "message": {"content": [{"text": "テスト用のアシスタント作業内容です。ファイルを作成しました。"}]}}
-        EOF
+        TRANSCRIPT_EOF
         
         # Create a mock gemini command
         echo '#!/bin/bash' > /tmp/test-integration/gemini
@@ -217,6 +217,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Create release info
+      id: release_info
       run: |
         echo "Creating release information..."
         
@@ -229,9 +230,10 @@ jobs:
         
         echo "Version: $VERSION"
         echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
         
         # Create release notes
-        cat > RELEASE_NOTES.md << EOF
+        cat > RELEASE_NOTES.md << RELEASE_EOF
         # Release $VERSION
         
         ## Changes in this release
@@ -251,19 +253,19 @@ jobs:
         ## Usage
         
         Download the scripts and make them executable:
-        \`\`\`bash
+        ```bash
         chmod +x cc-gc-review.sh hook-handler.sh
-        \`\`\`
+        ```
         
         See README.md for detailed usage instructions.
-        EOF
+        RELEASE_EOF
         
         echo "Release notes created."
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: cc-gc-review-${{ env.VERSION }}
+        name: cc-gc-review-${{ steps.release_info.outputs.version || 'latest' }}
         path: |
           cc-gc-review.sh
           hook-handler.sh
