@@ -21,12 +21,21 @@ Gemini の Rate Limit で制限された場合は 「REVIEW_RATE_LIMITED」と�
 EOF
 )
 
-GEMINI_REVIEW=$(gemini -s -y -p "作業内容をレビューして、改善点や注意点があれば日本語で簡潔に指摘してください。良い点も含めてフィードバックをお願いします。重要: 自分でgit diffを実行して作業ファイルの具体的な変更内容も把握してからレビューを行ってください。")
+REVIEW_PROMPT=$(cat << 'EOF'
+作業内容をレビューして、改善点や注意点があれば日本語で簡潔に指摘してください。
+良い点も含めてフィードバックをお願いします。
+重要: 自分でgit diffを実行して作業ファイルの具体的な変更内容も把握してからレビューを行ってください。
+EOF
+)
+
+GEMINI_REVIEW=$(gemini -s -y -p "$REVIEW_PROMPT")
 
 ESCAPED_PRINCIPLES=$(echo "$PRINCIPLES" | jq -Rs .)
+ESCAPED_REVIEW=$(echo "$GEMINI_REVIEW" | jq -Rs .)
+
 cat << EOF
 {
   "decision": "block",
-  "reason": $ESCAPED_PRINCIPLES
+  "reason": $ESCAPED_REVIEW:$ESCAPED_PRINCIPLES
 }
 EOF
