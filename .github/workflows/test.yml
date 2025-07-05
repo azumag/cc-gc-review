@@ -149,7 +149,7 @@ jobs:
         if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
           sudo ./install.sh /usr/local
         else
-          ./install.sh /usr/local
+          sudo ./install.sh /usr/local
         fi
         
     - name: Test script compatibility
