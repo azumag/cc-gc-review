@@ -141,6 +141,10 @@ send_review_to_tmux() {
         local current_count=0
         if [[ -f "$REVIEW_COUNT_FILE" ]]; then
             current_count=$(cat "$REVIEW_COUNT_FILE" 2>/dev/null || echo "0")
+            # Ensure current_count is a valid number
+            if ! [[ "$current_count" =~ ^[0-9]+$ ]]; then
+                current_count=0
+            fi
         fi
         
         if [[ "$current_count" -ge "$MAX_REVIEWS" ]]; then
@@ -205,6 +209,12 @@ $review_content"
 
 # ユーザーの続行確認を求める（10秒タイムアウト付き）
 prompt_for_continuation() {
+    # テストモードの場合はスキップ
+    if [[ "${CC_GC_REVIEW_TEST_MODE:-false}" == "true" ]]; then
+        echo "▶️  テストモード: 自動で続行します"
+        return 0
+    fi
+    
     echo "続行します"
     echo "停止するには 'n' を入力してください (10秒後に自動で続行):"
     
@@ -284,12 +294,6 @@ watch_with_inotify() {
                     if [[ -n "$content" ]]; then
                         echo "🔔 New review detected via inotifywait!"
                         
-                        # レビューカウントファイルをリセット（新しいファイル更新時）
-                        if [[ -f "$REVIEW_COUNT_FILE" ]]; then
-                            rm "$REVIEW_COUNT_FILE"
-                            echo "🔄 Review count reset due to new file update"
-                        fi
-                        
                         send_review_to_tmux "$session" "$content"
                         local send_result=$?
                         
@@ -323,12 +327,6 @@ watch_with_fswatch() {
             local content=$(cat "$filepath")
             if [[ -n "$content" ]]; then
                 echo "🔔 New review detected via fswatch!"
-                
-                # レビューカウントファイルをリセット（新しいファイル更新時）
-                if [[ -f "$REVIEW_COUNT_FILE" ]]; then
-                    rm "$REVIEW_COUNT_FILE"
-                    echo "🔄 Review count reset due to new file update"
-                fi
                 
                 send_review_to_tmux "$session" "$content"
                 local send_result=$?
@@ -374,12 +372,6 @@ watch_with_polling() {
                 if [[ -n "$content" ]]; then
                     echo "🔔 New review detected via polling!"
                     log "Sending review content (${#content} chars) to session: $session"
-                    
-                    # レビューカウントファイルをリセット（新しいファイル更新時）
-                    if [[ -f "$REVIEW_COUNT_FILE" ]]; then
-                        rm "$REVIEW_COUNT_FILE"
-                        echo "🔄 Review count reset due to new file update"
-                    fi
                     
                     send_review_to_tmux "$session" "$content"
                     local send_result=$?
@@ -450,4 +442,6 @@ main() {
 }
 
 # エントリーポイント
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
