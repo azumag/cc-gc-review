@@ -131,6 +131,33 @@ setup_tmux_session() {
 
 
 
+# レビューカウントリセット機能
+reset_review_count_if_needed() {
+    local filepath="$1"
+    
+    # カウントファイルが存在しない場合は何もしない
+    if [[ ! -f $REVIEW_COUNT_FILE ]]; then
+        return 0
+    fi
+    
+    # 現在のカウントを確認
+    local current_count
+    current_count=$(cat "$REVIEW_COUNT_FILE" 2>/dev/null || echo "0")
+    if ! [[ $current_count =~ ^[0-9]+$ ]]; then
+        current_count=0
+    fi
+    
+    # 制限に達していない場合は何もしない
+    if [[ $current_count -lt $MAX_REVIEWS ]]; then
+        return 0
+    fi
+    
+    # 制限に達している場合、カウントをリセット
+    echo "🔄 Review limit was reached. Resetting count due to new file update."
+    rm -f "$REVIEW_COUNT_FILE"
+    log "Review count reset due to new file update: $filepath"
+}
+
 # レビュー結果をtmuxに送信
 send_review_to_tmux() {
     local session="$1"
@@ -153,6 +180,7 @@ send_review_to_tmux() {
             echo "   1. Use --infinite-review option"
             echo "   2. Increase limit with --max-reviews N"
             echo "   3. Remove count file: rm $REVIEW_COUNT_FILE"
+            echo "   4. Wait for next file update to reset count automatically"
             echo "   📱 Will continue monitoring for new review files..."
             return 1
         fi
@@ -310,6 +338,9 @@ watch_with_inotify() {
                     if [[ -n "$content" ]]; then
                         echo "🔔 New review detected via inotifywait!"
                         
+                        # レビューカウントリセットチェック
+                        reset_review_count_if_needed "$filepath"
+                        
                         set +e  # Temporarily disable exit on error
                         send_review_to_tmux "$session" "$content"
                         local send_result=$?
@@ -349,6 +380,9 @@ watch_with_fswatch() {
             content=$(cat "$filepath")
             if [[ -n "$content" ]]; then
                 echo "🔔 New review detected via fswatch!"
+                
+                # レビューカウントリセットチェック
+                reset_review_count_if_needed "$filepath"
                 
                 set +e  # Temporarily disable exit on error
                 send_review_to_tmux "$session" "$content"
@@ -398,6 +432,9 @@ watch_with_polling() {
                 if [[ -n "$content" ]]; then
                     echo "🔔 New review detected via polling!"
                     log "Sending review content (${#content} chars) to session: $session"
+                    
+                    # レビューカウントリセットチェック
+                    reset_review_count_if_needed "$watch_file"
                     
                     set +e  # Temporarily disable exit on error
                     send_review_to_tmux "$session" "$content"
