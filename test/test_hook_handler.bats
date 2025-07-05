@@ -305,7 +305,7 @@ EOF
     # 特殊文字を含むトランスクリプトファイルを作成
     local complex_transcript="$TEST_TMP_DIR/complex-transcript.jsonl"
     cat > "$complex_transcript" << 'EOF'
-{"type": "assistant", "message": {"content": [{"text": "テスト作業: \"quotes\", 'single quotes', \n改行, $変数, &特殊文字"}]}}
+{"type": "assistant", "message": {"content": [{"text": "テスト作業: \"quotes\", 'single quotes', \\n改行, $変数, &特殊文字"}]}}
 EOF
     
     local test_json='{

@@ -2,8 +2,15 @@
 
 # test_watch_reset.bats - Tests for watch functions and reset behavior
 
-load 'test_helper/bats-support/load'
-load 'test_helper/bats-assert/load'
+# Load bats helper libraries
+# In CI, the working directory is already in test/, so we need to handle both cases
+if [[ -f "test_helper/bats-support/load.bash" ]]; then
+    source "test_helper/bats-support/load.bash"
+    source "test_helper/bats-assert/load.bash"
+elif [[ -f "../test/test_helper/bats-support/load.bash" ]]; then
+    source "../test/test_helper/bats-support/load.bash"
+    source "../test/test_helper/bats-assert/load.bash"
+fi
 
 setup() {
     # Clean up any leftover test directories first
