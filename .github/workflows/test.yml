@@ -57,8 +57,8 @@ jobs:
     - name: Run specific test suites
       run: |
         cd test
-        echo "Running cc-gen-review tests..."
-        ./run_tests.sh --file test_cc_gen_review.bats --verbose
+        echo "Running cc-gc-review tests..."
+        ./run_tests.sh --file test_cc_gc_review.bats --verbose
         echo "Running hook-handler tests..."
         ./run_tests.sh --file test_hook_handler.bats --verbose
         
@@ -100,7 +100,7 @@ jobs:
         
     - name: Check script executability
       run: |
-        [ -x cc-gen-review.sh ] || (echo "cc-gen-review.sh is not executable" && exit 1)
+        [ -x cc-gc-review.sh ] || (echo "cc-gc-review.sh is not executable" && exit 1)
         [ -x hook-handler.sh ] || (echo "hook-handler.sh is not executable" && exit 1)
         [ -x test/run_tests.sh ] || (echo "test/run_tests.sh is not executable" && exit 1)
         [ -x test/setup_test.sh ] || (echo "test/setup_test.sh is not executable" && exit 1)

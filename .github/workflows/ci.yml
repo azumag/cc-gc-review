@@ -20,7 +20,7 @@ jobs:
     
     - name: Make scripts executable
       run: |
-        chmod +x cc-gen-review.sh
+        chmod +x cc-gc-review.sh
         chmod +x hook-handler.sh
         chmod +x test/run_tests.sh
     
@@ -41,7 +41,7 @@ jobs:
     
     - name: Check script syntax
       run: |
-        bash -n cc-gen-review.sh
+        bash -n cc-gc-review.sh
         bash -n hook-handler.sh
         bash -n test/run_tests.sh
     
@@ -69,7 +69,7 @@ jobs:
     
     - name: Run shellcheck
       run: |
-        shellcheck -S warning cc-gen-review.sh
+        shellcheck -S warning cc-gc-review.sh
         shellcheck -S warning hook-handler.sh
         shellcheck -S warning test/run_tests.sh
         shellcheck -S warning test/*.bats
@@ -99,7 +99,7 @@ jobs:
     
     - name: Check shell script formatting
       run: |
-        shfmt -d -s -i 4 cc-gen-review.sh
+        shfmt -d -s -i 4 cc-gc-review.sh
         shfmt -d -s -i 4 hook-handler.sh
         shfmt -d -s -i 4 test/run_tests.sh
 
@@ -137,8 +137,8 @@ jobs:
         fi
         
         # Check if scripts have proper help text
-        if ! grep -q "show_help" cc-gen-review.sh; then
-          echo "Warning: cc-gen-review.sh missing help function"
+        if ! grep -q "show_help" cc-gc-review.sh; then
+          echo "Warning: cc-gc-review.sh missing help function"
         fi
         
         echo "Documentation check completed."
@@ -157,7 +157,7 @@ jobs:
     
     - name: Make scripts executable
       run: |
-        chmod +x cc-gen-review.sh
+        chmod +x cc-gc-review.sh
         chmod +x hook-handler.sh
         chmod +x test/run_tests.sh
     
@@ -194,14 +194,14 @@ jobs:
         
         # Cleanup
         rm -rf /tmp/test-integration
-        rm -f /tmp/gemini-review /tmp/gemini-prompt /tmp/cc-gen-review-hook.log
+        rm -f /tmp/gemini-review /tmp/gemini-prompt /tmp/cc-gc-review-hook.log
     
     - name: Test script permissions and execution
       run: |
         echo "Testing script permissions and basic execution..."
         
-        # Test cc-gen-review.sh help
-        ./cc-gen-review.sh --help || true
+        # Test cc-gc-review.sh help
+        ./cc-gc-review.sh --help || true
         
         # Test hook-handler.sh with invalid input (should handle gracefully)
         echo '{"invalid": "json"}' | ./hook-handler.sh || true
@@ -252,7 +252,7 @@ jobs:
         
         Download the scripts and make them executable:
         \`\`\`bash
-        chmod +x cc-gen-review.sh hook-handler.sh
+        chmod +x cc-gc-review.sh hook-handler.sh
         \`\`\`
         
         See README.md for detailed usage instructions.
@@ -263,9 +263,9 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: cc-gen-review-${{ env.VERSION }}
+        name: cc-gc-review-${{ env.VERSION }}
         path: |
-          cc-gen-review.sh
+          cc-gc-review.sh
           hook-handler.sh
           README.md
           RELEASE_NOTES.md
