@@ -257,8 +257,10 @@ watch_review_files() {
             content=$(cat "$watch_file")
             if [[ -n "$content" ]]; then
                 echo "🔄 Resending existing review file..."
+                set +e  # Temporarily disable exit on error
                 send_review_to_tmux "$session" "$content"
                 local send_result=$?
+                set -e  # Re-enable exit on error
                 
                 if [[ $send_result -eq 1 ]]; then
                     echo "⚠️  Review limit reached during resend. Continuing to monitor..."
@@ -308,8 +310,10 @@ watch_with_inotify() {
                     if [[ -n "$content" ]]; then
                         echo "🔔 New review detected via inotifywait!"
                         
+                        set +e  # Temporarily disable exit on error
                         send_review_to_tmux "$session" "$content"
                         local send_result=$?
+                        set -e  # Re-enable exit on error
                         
                         if [[ $send_result -eq 1 ]]; then
                             echo "⚠️  Review limit reached. Continuing to monitor for new files..."
@@ -346,8 +350,10 @@ watch_with_fswatch() {
             if [[ -n "$content" ]]; then
                 echo "🔔 New review detected via fswatch!"
                 
+                set +e  # Temporarily disable exit on error
                 send_review_to_tmux "$session" "$content"
                 local send_result=$?
+                set -e  # Re-enable exit on error
                 
                 if [[ $send_result -eq 1 ]]; then
                     echo "⚠️  Review limit reached. Continuing to monitor for new files..."
@@ -393,8 +399,10 @@ watch_with_polling() {
                     echo "🔔 New review detected via polling!"
                     log "Sending review content (${#content} chars) to session: $session"
                     
+                    set +e  # Temporarily disable exit on error
                     send_review_to_tmux "$session" "$content"
                     local send_result=$?
+                    set -e  # Re-enable exit on error
                     
                     if [[ $send_result -eq 1 ]]; then
                         echo "⚠️  Review limit reached. Continuing to monitor for new files..."
