@@ -148,11 +148,12 @@ send_review_to_tmux() {
         fi
         
         if [[ "$current_count" -ge "$MAX_REVIEWS" ]]; then
-            echo "🚫 Review limit reached ($current_count/$MAX_REVIEWS). Stopping review loop."
-            echo "   To continue, either:"
+            echo "🚫 Review limit reached ($current_count/$MAX_REVIEWS). Skipping this review."
+            echo "   To continue sending reviews, either:"
             echo "   1. Use --infinite-review option"
             echo "   2. Increase limit with --max-reviews N"
             echo "   3. Remove count file: rm $REVIEW_COUNT_FILE"
+            echo "   📱 Will continue monitoring for new review files..."
             return 1
         fi
         
@@ -298,8 +299,8 @@ watch_with_inotify() {
                         local send_result=$?
                         
                         if [[ $send_result -eq 1 ]]; then
-                            echo "⚠️  Review limit reached. Exiting watch mode."
-                            exit 1
+                            echo "⚠️  Review limit reached. Continuing to monitor for new files..."
+                            # Continue monitoring instead of exiting
                         elif [[ $send_result -eq 2 ]]; then
                             echo "👋 Exiting watch mode by user request."
                             exit 0
@@ -332,8 +333,8 @@ watch_with_fswatch() {
                 local send_result=$?
                 
                 if [[ $send_result -eq 1 ]]; then
-                    echo "⚠️  Review limit reached. Exiting watch mode."
-                    exit 1
+                    echo "⚠️  Review limit reached. Continuing to monitor for new files..."
+                    # Continue monitoring instead of exiting
                 elif [[ $send_result -eq 2 ]]; then
                     echo "👋 Exiting watch mode by user request."
                     exit 0
@@ -377,8 +378,8 @@ watch_with_polling() {
                     local send_result=$?
                     
                     if [[ $send_result -eq 1 ]]; then
-                        echo "⚠️  Review limit reached. Exiting watch mode."
-                        exit 1
+                        echo "⚠️  Review limit reached. Continuing to monitor for new files..."
+                        # Continue monitoring instead of exiting
                     elif [[ $send_result -eq 2 ]]; then
                         echo "👋 Exiting watch mode by user request."
                         exit 0
