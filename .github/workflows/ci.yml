@@ -1,0 +1,282 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tmux jq
+    
+    - name: Install BATS
+      run: |
+        cd test
+        ./setup_test.sh
+    
+    - name: Make scripts executable
+      run: |
+        chmod +x cc-gen-review.sh
+        chmod +x hook-handler.sh
+        chmod +x test/run_tests.sh
+    
+    - name: Run hook-handler tests
+      run: |
+        cd test
+        ./run_tests.sh -f test_hook_handler.bats
+    
+    - name: Run cc-gen-review tests
+      run: |
+        cd test
+        ./run_tests.sh -f test_cc_gen_review.bats
+    
+    - name: Run all tests
+      run: |
+        cd test
+        ./run_tests.sh
+    
+    - name: Check script syntax
+      run: |
+        bash -n cc-gen-review.sh
+        bash -n hook-handler.sh
+        bash -n test/run_tests.sh
+    
+    - name: Validate test files
+      run: |
+        for file in test/*.bats; do
+          if [ -f "$file" ]; then
+            bash -n "$file" || {
+              echo "Syntax error in $file"
+              exit 1
+            }
+          fi
+        done
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install shellcheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+    
+    - name: Run shellcheck
+      run: |
+        shellcheck -S warning cc-gen-review.sh
+        shellcheck -S warning hook-handler.sh
+        shellcheck -S warning test/run_tests.sh
+        shellcheck -S warning test/*.bats
+    
+    - name: Check for security issues
+      run: |
+        echo "Checking for potential security issues in shell scripts..."
+        if grep -r "eval\|rm -rf /\|chmod 777" --include="*.sh" --include="*.bash" .; then
+          echo "WARNING: Potential security issues found!"
+          echo "Please review the above matches carefully."
+          exit 1
+        fi
+        echo "No obvious security issues found."
+
+  format:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install shfmt
+      run: |
+        wget https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_linux_amd64 -O /usr/local/bin/shfmt
+        chmod +x /usr/local/bin/shfmt
+      env:
+        DEBIAN_FRONTEND: noninteractive
+    
+    - name: Check shell script formatting
+      run: |
+        shfmt -d -s -i 4 cc-gen-review.sh
+        shfmt -d -s -i 4 hook-handler.sh
+        shfmt -d -s -i 4 test/run_tests.sh
+
+  documentation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install markdown linter
+      run: |
+        npm install -g markdownlint-cli
+    
+    - name: Check markdown files
+      run: |
+        markdownlint README.md || true
+        markdownlint zenn.md || true
+        markdownlint GEMINI.md || true
+    
+    - name: Verify documentation completeness
+      run: |
+        echo "Checking documentation completeness..."
+        
+        # Check if README contains basic sections
+        if ! grep -q "## 概要" README.md; then
+          echo "Warning: README.md missing overview section"
+        fi
+        
+        if ! grep -q "## 使い方" README.md; then
+          echo "Warning: README.md missing usage section"
+        fi
+        
+        if ! grep -q "## オプション" README.md; then
+          echo "Warning: README.md missing options section"
+        fi
+        
+        # Check if scripts have proper help text
+        if ! grep -q "show_help" cc-gen-review.sh; then
+          echo "Warning: cc-gen-review.sh missing help function"
+        fi
+        
+        echo "Documentation check completed."
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: [test, lint, format]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tmux jq
+    
+    - name: Install BATS
+      run: |
+        cd test
+        ./setup_test.sh
+    
+    - name: Make scripts executable
+      run: |
+        chmod +x cc-gen-review.sh
+        chmod +x hook-handler.sh
+        chmod +x test/run_tests.sh
+    
+    - name: Integration test - Mock scenario
+      run: |
+        echo "Running integration test with mock scenario..."
+        
+        # Create a test transcript file
+        mkdir -p /tmp/test-integration
+        cat > /tmp/test-integration/test-transcript.jsonl << 'EOF'
+        {"type": "user", "message": {"content": [{"text": "テスト用のユーザーリクエスト"}]}}
+        {"type": "assistant", "message": {"content": [{"text": "テスト用のアシスタント作業内容です。ファイルを作成しました。"}]}}
+        EOF
+        
+        # Create a mock gemini command
+        echo '#!/bin/bash' > /tmp/test-integration/gemini
+        echo 'echo "統合テスト用のモックレビュー結果"' >> /tmp/test-integration/gemini
+        chmod +x /tmp/test-integration/gemini
+        
+        # Add to PATH
+        export PATH="/tmp/test-integration:$PATH"
+        
+        # Test hook-handler with mock data
+        echo '{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}' | ./hook-handler.sh
+        
+        # Check if review file was created
+        if [ -f "/tmp/gemini-review" ]; then
+          echo "✅ Integration test passed: Review file created"
+          cat /tmp/gemini-review
+        else
+          echo "❌ Integration test failed: Review file not created"
+          exit 1
+        fi
+        
+        # Cleanup
+        rm -rf /tmp/test-integration
+        rm -f /tmp/gemini-review /tmp/gemini-prompt /tmp/cc-gen-review-hook.log
+    
+    - name: Test script permissions and execution
+      run: |
+        echo "Testing script permissions and basic execution..."
+        
+        # Test cc-gen-review.sh help
+        ./cc-gen-review.sh --help || true
+        
+        # Test hook-handler.sh with invalid input (should handle gracefully)
+        echo '{"invalid": "json"}' | ./hook-handler.sh || true
+        
+        echo "✅ Permission and execution tests completed"
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [integration]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create release info
+      run: |
+        echo "Creating release information..."
+        
+        # Get version from git tag or use commit hash
+        if git describe --tags --exact-match HEAD 2>/dev/null; then
+          VERSION=$(git describe --tags --exact-match HEAD)
+        else
+          VERSION="dev-$(git rev-parse --short HEAD)"
+        fi
+        
+        echo "Version: $VERSION"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        
+        # Create release notes
+        cat > RELEASE_NOTES.md << EOF
+        # Release $VERSION
+        
+        ## Changes in this release
+        
+        - Latest commit: $(git log -1 --pretty=format:"%h %s")
+        - Build date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        - Commit SHA: $(git rev-parse HEAD)
+        
+        ## Test Results
+        
+        All tests passed successfully:
+        - Unit tests: ✅
+        - Integration tests: ✅
+        - Linting: ✅
+        - Security checks: ✅
+        
+        ## Usage
+        
+        Download the scripts and make them executable:
+        \`\`\`bash
+        chmod +x cc-gen-review.sh hook-handler.sh
+        \`\`\`
+        
+        See README.md for detailed usage instructions.
+        EOF
+        
+        echo "Release notes created."
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: cc-gen-review-${{ env.VERSION }}
+        path: |
+          cc-gen-review.sh
+          hook-handler.sh
+          README.md
+          RELEASE_NOTES.md
+        retention-days: 90

@@ -83,7 +83,16 @@ tmux attach-session -t claude
 }
 ```
 
-基本的な設定（git diffなし）：
+git commitを確認する設定：
+```json
+{
+  "hooks": {
+    "stop": "/path/to/cc-gen-review/hook-handler.sh --git-commit --yolo"
+  }
+}
+```
+
+基本的な設定（git diff/commitなし）：
 ```json
 {
   "hooks": {
@@ -97,9 +106,10 @@ tmux attach-session -t claude
 | オプション | 説明 |
 |-----------|------|
 | `--git-diff` | Geminiに「git diffを実行して作業ファイルの変更内容を把握する」指示を追加 |
+| `--git-commit` | Geminiに「git commitを確認し、ファイルの変更内容を把握する」指示を追加 |
 | `--yolo`, `-y` | Geminiをyoloモード（-y）で実行 |
 
-**注意**: `--git-diff`オプションを使用すると、自動的に`--yolo`モードも有効になります。これはGeminiがgit diffを実行する際に確認プロンプトを表示させないためです。
+**注意**: `--git-diff`や`--git-commit`オプションを使用すると、自動的に`--yolo`モードも有効になります。これはGeminiがgitコマンドを実行する際に確認プロンプトを表示させないためです。
 
 レビューファイルは固定で`/tmp/gemini-review`に出力されます。
 
