@@ -122,7 +122,7 @@ setup_ci_environment() {
 
         # Batsヘルパーライブラリのパスを設定
         SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-        export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support/src:${SCRIPT_DIR}/test_helper/bats-assert/src:${BATS_LIB_PATH:-}"
+        export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_helper/bats-assert:${BATS_LIB_PATH:-}"
 
         echo -e "${GREEN}✓ CI environment setup completed${NC}"
     fi
@@ -144,8 +144,6 @@ run_tests() {
 
     # Batsヘルパーライブラリを明示的にソースする
     # CI環境のワーキングディレクトリがtest/であるため、相対パスで指定
-    source "${SCRIPT_DIR}/test_helper/bats-support/src/load.bash"
-    source "${SCRIPT_DIR}/test_helper/bats-assert/src/load.bash"
 
     if [ "$VERBOSE" = true ]; then
         bats_options="--verbose-run"
