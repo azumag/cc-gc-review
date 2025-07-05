@@ -1,10 +1,47 @@
 #!/bin/bash
+
+# Cleanup function for temporary files
+cleanup() {
+    [ -n "$TEMP_STDOUT" ] && rm -f "$TEMP_STDOUT" 
+    [ -n "$TEMP_STDERR" ] && rm -f "$TEMP_STDERR"
+}
+
+# Function to extract last assistant message from JSONL transcript
+extract_last_assistant_message() {
+    local transcript_path="$1"
+    local line_limit="${2:-0}"  # 0 means no limit
+    
+    if [ ! -f "$transcript_path" ]; then
+        return 1
+    fi
+    
+    local jq_input
+    if [ "$line_limit" -gt 0 ]; then
+        jq_input=$(tail -n "$line_limit" "$transcript_path")
+    else
+        jq_input=$(cat "$transcript_path")
+    fi
+    
+    echo "$jq_input" | jq -r --slurp '
+        map(select(.type == "assistant")) |
+        if length > 0 then
+            .[-1].message.content[]? |
+            select(.type == "text") |
+            .text
+        else
+            empty
+        end
+    ' 2>/dev/null
+}
+
+# Set trap for cleanup on script exit
+trap cleanup EXIT
+
 INPUT=$(cat)
 
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path')
 if [ -f "$TRANSCRIPT_PATH" ]; then
-    LAST_MESSAGES=$(tail -n 100 "$TRANSCRIPT_PATH" | \
-        jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' 2>/dev/null | tail -n 1)
+    LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100)
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
         exit 0
     fi
@@ -15,16 +52,47 @@ fi
 
 PRINCIPLES=$(cat << 'EOF'
 ## 原則
-Gemini から、非の打ちどころがなく完璧だとレビューをもらったときのみ「REVIEW_COMPLETED」とだけ発言せよ。
+Gemini のレビューにて改善点を指摘された場合は、その改善点に従って修正せよ。
+Gemini から、これ以上の改善点は特に無しとレビューをもらったときのみ「REVIEW_COMPLETED」とだけ発言せよ。
 Gemini の Rate Limit で制限された場合は 「REVIEW_RATE_LIMITED」とだけ発言せよ。
 ----
 EOF
 )
 
-REVIEW_PROMPT=$(cat << 'EOF'
-作業内容をレビューして、改善点や注意点があれば日本語で簡潔に指摘してください。
-良い点も含めてフィードバックをお願いします。
-重要: 自分でgit diffを実行して作業ファイルの具体的な変更内容も把握してからレビューを行ってください。
+CLAUDE_SUMMARY=""
+if [ -f "$TRANSCRIPT_PATH" ]; then
+    # Extract Claude's last summary from transcript (JSONL format)
+    # NOTE: This depends on Claude Code's transcript JSONL structure
+    # If Claude Code changes its output format, this may need updates
+    CLAUDE_SUMMARY=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 0)
+    
+    # Check if extraction was successful
+    if [ -z "$CLAUDE_SUMMARY" ]; then
+        echo "[gemini-review-hook] Warning: Failed to extract Claude summary from transcript (no assistant messages found)" >&2
+    fi
+    
+    # Limit CLAUDE_SUMMARY to 1000 characters to avoid token limit
+    if [ ${#CLAUDE_SUMMARY} -gt 1000 ]; then
+        # Try to preserve important parts: first 400 chars + last 400 chars
+        # Only if text is longer than 800 chars to avoid overlap
+        if [ ${#CLAUDE_SUMMARY} -gt 800 ]; then
+            FIRST_PART=$(echo "$CLAUDE_SUMMARY" | head -c 400)
+            LAST_PART=$(echo "$CLAUDE_SUMMARY" | tail -c 400)
+            CLAUDE_SUMMARY="${FIRST_PART}...(中略)...${LAST_PART}"
+        else
+            # For texts between 800-1000 chars, just truncate
+            CLAUDE_SUMMARY=$(echo "$CLAUDE_SUMMARY" | head -c 1000)
+            CLAUDE_SUMMARY="${CLAUDE_SUMMARY}...(truncated)"
+        fi
+    fi
+fi
+
+REVIEW_PROMPT=$(cat << EOF
+作業内容をレビューして、改善点や注意点を指摘してください。
+重要: 自分で git diff を実行して作業ファイルの具体的な変更内容も把握してからレビューを行ってください。
+
+## Claude の最後の発言（作業まとめ）:
+${CLAUDE_SUMMARY}
 EOF
 )
 
@@ -127,15 +195,15 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
     exit 0
 fi
 
-# Cleanup
-rm -f "$TEMP_STDOUT" "$TEMP_STDERR"
-
 ESCAPED_PRINCIPLES=$(echo "$PRINCIPLES" | jq -Rs .)
 ESCAPED_REVIEW=$(echo "$GEMINI_REVIEW" | jq -Rs .)
 
+# Note: Cleanup is handled by trap on script exit
+
+COMBINED_REASON=$(echo -e "$GEMINI_REVIEW\n\n$PRINCIPLES" | jq -Rs .)
 cat << EOF
 {
   "decision": "block",
-  "reason": $ESCAPED_REVIEW:$ESCAPED_PRINCIPLES
+  "reason": $COMBINED_REASON
 }
 EOF
