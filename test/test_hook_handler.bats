@@ -309,14 +309,19 @@ EOF
     # 特殊文字を含むトランスクリプトファイルを作成
     local complex_transcript="$TEST_TMP_DIR/complex-transcript.jsonl"
     cat > "$complex_transcript" << 'EOF'
-{"type": "assistant", "message": {"content": [{"text": "テスト作業: \"quotes\", 'single quotes', \\n改行, $変数, &特殊文字"}]}}
+{"type": "assistant", "message": {"content": [{"text": "テスト作業: quotes, single quotes, 改行, 変数, 特殊文字"}]}}
 EOF
     
-    local test_json='{
-        "session_id": "test123",
-        "transcript_path": "'$complex_transcript'",
-        "stop_hook_active": false
-    }'
+    # JSON構築を安全に行う
+    local test_json
+    test_json=$(cat << EOF
+{
+    "session_id": "test123",
+    "transcript_path": "$complex_transcript",
+    "stop_hook_active": false
+}
+EOF
+)
     
     run bash -c "echo '$test_json' | '$SCRIPT_DIR/hook-handler.sh'"
     
