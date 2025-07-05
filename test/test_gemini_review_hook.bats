@@ -78,7 +78,7 @@ trap cleanup_test_env EXIT
 @test "CLAUDE_SUMMARY truncation for long text" {
     # Create transcript with long summary
     LONG_TRANSCRIPT="$TEST_TEMP_DIR/long_transcript.json"
-    LONG_TEXT=$(printf 'A%.0s' {1..1200})  # 1200 character string
+    LONG_TEXT=$(printf 'A%.0s' $(seq 1 1200))  # 1200 character string
     
     cat > "$LONG_TRANSCRIPT" << EOF
 [
