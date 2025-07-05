@@ -290,7 +290,7 @@ teardown() {
     # Test second review should be passed (limit reached) and reset count
     run send_review_to_tmux "$TEST_SESSION" "Second review content"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "    [[ "$output" =~ " Review limit reached (1/1)" ]]" ]]
+    [[ "$output" =~ "Review limit reached (1/1)" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted after reset
@@ -352,7 +352,7 @@ teardown() {
     # All reviews should be passed immediately when MAX_REVIEWS=0
     run send_review_to_tmux "$TEST_SESSION" "First review with zero limit"
     [ "$status" -eq 1 ]
-        [[ "$output" =~ " Review limit reached (0/0)" ]]
+    [[ "$output" =~ " Review limit reached (0/0)" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should not exist

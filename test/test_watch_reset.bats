@@ -202,12 +202,12 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
-    MAX_REVIEWS=4
-    INFINITE_REVIEW=false
-    REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
-    THINK_MODE=false
-    CUSTOM_COMMAND=""
-    CC_GC_REVIEW_TEST_MODE=true
+    export MAX_REVIEWS=4
+    export INFINITE_REVIEW=false
+    export REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
+    export THINK_MODE=false
+    export CUSTOM_COMMAND=""
+    export CC_GC_REVIEW_TEST_MODE=true
     
     # Test that new implementation preserves count correctly
     echo "1" > "$TEST_COUNT_FILE"
@@ -239,6 +239,12 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
+    export MAX_REVIEWS=2
+    export INFINITE_REVIEW=false
+    export REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
+    export THINK_MODE=false
+    export CUSTOM_COMMAND=""
+    export CC_GC_REVIEW_TEST_MODE=true
     
     # Test that reset ONLY happens when limit is reached
     
@@ -256,7 +262,7 @@ teardown() {
     # Third review - should be passed and trigger reset
     run send_review_to_tmux "$TEST_SESSION" "Third review (should be passed)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ Review\ limit\ reached\ \(2/2\) ]]
+    [[ "$output" =~ "Review limit reached (2/2)" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted after reset
