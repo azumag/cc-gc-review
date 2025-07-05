@@ -386,7 +386,7 @@ watch_with_inotify() {
         watch_dir="$(dirname "$watch_file")"
         inotifywait -e modify,create "$watch_dir" 2>/dev/null > "$tmp_output"
         
-        while read -r dir event file; do
+        while read -r dir _ file; do
             if [[ "$file" == "$(basename "$watch_file")" ]]; then
                 local filepath="$dir$file"
                 process_review_file "$filepath" "$session"
