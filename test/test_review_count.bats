@@ -290,7 +290,7 @@ teardown() {
     # Test second review should be passed (limit reached) and reset count
     run send_review_to_tmux "$TEST_SESSION" "Second review content"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Review limit reached (1/1)" ]]
+    [[ "$output" =~ Review\ limit\ reached\ \(1/1\) ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted after reset
@@ -342,17 +342,17 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
-    MAX_REVIEWS=0
-    INFINITE_REVIEW=false
-    REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
-    THINK_MODE=false
-    CUSTOM_COMMAND=""
-    CC_GC_REVIEW_TEST_MODE=true
+    export MAX_REVIEWS=0
+    export INFINITE_REVIEW=false
+    export REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
+    export THINK_MODE=false
+    export CUSTOM_COMMAND=""
+    export CC_GC_REVIEW_TEST_MODE=true
     
     # All reviews should be passed immediately when MAX_REVIEWS=0
     run send_review_to_tmux "$TEST_SESSION" "First review with zero limit"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ " Review limit reached (0/0)" ]]
+    [[ "$output" =~ Review\ limit\ reached\ \(0/0\) ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should not exist
