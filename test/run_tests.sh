@@ -160,16 +160,16 @@ run_tests() {
         fi
         echo -e "${YELLOW}Running specific test file: $TEST_FILE${NC}"
         if [ -n "$TEST_PATTERN" ]; then
-            bats $bats_options --filter "$TEST_PATTERN" "$TEST_FILE"
+            bats "$bats_options" --filter "$TEST_PATTERN" "$TEST_FILE"
         else
-            bats $bats_options "$TEST_FILE"
+            bats "$bats_options" "$TEST_FILE"
         fi
     else
         echo -e "${YELLOW}Running all test files...${NC}"
         if [ -n "$TEST_PATTERN" ]; then
-            bats $bats_options --filter "$TEST_PATTERN" test_*.bats
+            bats "$bats_options" --filter "$TEST_PATTERN" test_*.bats
         else
-            bats $bats_options test_*.bats
+            bats "$bats_options" test_*.bats
         fi
     fi
 }
@@ -181,7 +181,7 @@ show_results() {
     echo ""
     echo -e "${BLUE}=== Test Results ===${NC}"
 
-    if [ $exit_code -eq 0 ]; then
+    if [ "$exit_code" -eq 0 ]; then
         echo -e "${GREEN}✓ All tests passed!${NC}"
     else
         echo -e "${RED}✗ Some tests failed${NC}"
@@ -193,7 +193,7 @@ show_results() {
         echo "  - Check individual test files for specific failures"
     fi
 
-    return $exit_code
+    return "$exit_code"
 }
 
 # メイン処理
