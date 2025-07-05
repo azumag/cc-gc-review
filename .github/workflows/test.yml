@@ -170,6 +170,10 @@ jobs:
         cd test
         chmod +x setup_test.sh run_tests.sh
         ./setup_test.sh
+
+    - name: initialize submodules
+      run: |
+        git submodule update --init --recursive
         
     - name: Run basic compatibility tests
       run: |
