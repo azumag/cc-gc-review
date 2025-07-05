@@ -78,7 +78,8 @@ jobs:
         shellcheck -S warning cc-gc-review.sh
         shellcheck -S warning hook-handler.sh
         shellcheck -S warning test/run_tests.sh
-        shellcheck -S warning test/*.bats
+        # Only check our own bats files, exclude submodule test files
+        find test/ -name "*.bats" -not -path "test/test_helper/*" -exec shellcheck -S warning {} \;
     
     - name: Check for security issues
       run: |
