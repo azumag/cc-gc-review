@@ -59,7 +59,8 @@ install_bats_macos() {
 install_bats_from_source() {
     echo -e "${YELLOW}Installing bats from source...${NC}"
     
-    local temp_dir=$(mktemp -d)
+    local temp_dir
+    temp_dir=$(mktemp -d)
     cd "$temp_dir"
     
     # Clone bats-core
@@ -82,7 +83,8 @@ install_bats_from_source() {
 install_bats_helpers() {
     echo -e "${YELLOW}Installing bats helper libraries...${NC}"
     
-    local test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local test_dir
+    test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local helper_dir="$test_dir/test_helper"
     
     mkdir -p "$helper_dir"
@@ -105,7 +107,8 @@ install_bats_helpers() {
 install_dependencies() {
     echo -e "${YELLOW}Installing additional dependencies...${NC}"
     
-    local os=$(detect_os)
+    local os
+    os=$(detect_os)
     
     case "$os" in
         "linux")
@@ -155,7 +158,8 @@ verify_installation() {
     done
     
     # Check helper libraries
-    local test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local test_dir
+    test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local helper_dir="$test_dir/test_helper"
     
     for helper in bats-support bats-assert; do
@@ -179,7 +183,8 @@ verify_installation() {
 # Main installation function
 main() {
     echo "Detecting OS..."
-    local os=$(detect_os)
+    local os
+    os=$(detect_os)
     echo "Detected OS: $os"
     
     # Check if bats is already installed

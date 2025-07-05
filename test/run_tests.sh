@@ -46,33 +46,87 @@ PARALLEL=false
 # 引数の解析
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -f|--file)
-            TEST_FILE="$2"
-            shift 2
-            ;;
-        -t|--test)
-            TEST_PATTERN="$2"
-            shift 2
-            ;;
-        -v|--verbose)
-            VERBOSE=true
-            shift
-            ;;
-        -p|--parallel)
-            PARALLEL=true
-            shift
-            ;;
-        -h|--help)
-            show_usage
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}Unknown option: $1${NC}"
-            show_usage
-            exit 1
-            ;;
+    -f | --file)
+        TEST_FILE="$2"
+        shift 2
+        ;;
+    -t | --test)
+        TEST_PATTERN="$2"
+        shift 2
+        ;;
+    -v | --verbose)
+        VERBOSE=true
+        shift
+        ;;
+    -p | --parallel)
+        PARALLEL=true
+        shift
+        ;;
+    -h | --help)
+        show_usage
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}Unknown option: $1${NC}"
+        show_usage
+        exit 1
+        ;;
     esac
 done
+
+# テスト前のクリーンアップ
+cleanup_before_test() {
+    echo -e "${YELLOW}Cleaning up test environment...${NC}"
+
+    # 既存のテスト用tmuxセッションを終了
+    tmux list-sessions 2>/dev/null | grep "test-claude" | cut -d: -f1 | xargs -I {} tmux kill-session -t {} 2>/dev/null || true
+
+    # テスト用一時ファイルを削除
+    rm -rf ./test-tmp-* 2>/dev/null || true
+    rm -f /tmp/gemini-review* 2>/dev/null || true
+    rm -f /tmp/gemini-prompt* 2>/dev/null || true
+    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
+
+    # mktemp で作成された一時ディレクトリも削除
+    find /tmp -maxdepth 1 -name "tmp.*" -type d -user "$(whoami)" -mtime +1 -exec rm -rf {} + 2>/dev/null || true
+
+    echo -e "${GREEN}✓ Cleanup completed${NC}"
+}
+
+# CI環境の検出と対応
+setup_ci_environment() {
+    if [ "${CI:-false}" = "true" ]; then
+        echo -e "${YELLOW}CI environment detected, applying CI-specific settings...${NC}"
+
+        # CI環境でのtmuxの初期化
+        export TMUX_TMPDIR=/tmp
+
+        # CI環境での表示設定
+        export TERM=xterm-256color
+
+        # Batsヘルパーライブラリの自動セットアップ
+        if [ ! -d "test_helper/bats-support" ] || [ ! -d "test_helper/bats-assert" ]; then
+            echo -e "${YELLOW}Setting up bats helper libraries for CI...${NC}"
+            mkdir -p test_helper
+
+            # bats-supportをダウンロード
+            if [ ! -d "test_helper/bats-support" ]; then
+                git clone --depth 1 https://github.com/bats-core/bats-support.git test_helper/bats-support
+            fi
+
+            # bats-assertをダウンロード
+            if [ ! -d "test_helper/bats-assert" ]; then
+                git clone --depth 1 https://github.com/bats-core/bats-assert.git test_helper/bats-assert
+            fi
+        fi
+
+        # Batsヘルパーライブラリのパスを設定
+        SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+        export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_helper/bats-assert:${BATS_LIB_PATH:-}"
+
+        echo -e "${GREEN}✓ CI environment setup completed${NC}"
+    fi
+}
 
 # 必要なツールの確認
 if ! command -v bats >/dev/null 2>&1; then
@@ -81,37 +135,24 @@ if ! command -v bats >/dev/null 2>&1; then
     exit 1
 fi
 
-# テスト前のクリーンアップ
-cleanup_before_test() {
-    echo -e "${YELLOW}Cleaning up test environment...${NC}"
-    
-    # 既存のテスト用tmuxセッションを終了
-    tmux list-sessions 2>/dev/null | grep "test-claude" | cut -d: -f1 | xargs -I {} tmux kill-session -t {} 2>/dev/null || true
-    
-    # テスト用一時ファイルを削除
-    rm -rf ./test-tmp-* 2>/dev/null || true
-    rm -f /tmp/gemini-review* 2>/dev/null || true
-    rm -f /tmp/gemini-prompt* 2>/dev/null || true
-    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
-    
-    # mktemp で作成された一時ディレクトリも削除
-    find /tmp -maxdepth 1 -name "tmp.*" -type d -user "$(whoami)" -mtime +1 -exec rm -rf {} + 2>/dev/null || true
-    
-    echo -e "${GREEN}✓ Cleanup completed${NC}"
-}
+# CI環境のセットアップ
+setup_ci_environment
 
 # テスト実行
 run_tests() {
     local bats_options=""
-    
+
+    # Batsヘルパーライブラリを明示的にソースする
+    # CI環境のワーキングディレクトリがtest/であるため、相対パスで指定
+
     if [ "$VERBOSE" = true ]; then
         bats_options="--verbose-run"
     fi
-    
+
     if [ "$PARALLEL" = true ]; then
         bats_options="$bats_options --jobs 4"
     fi
-    
+
     if [ -n "$TEST_FILE" ]; then
         if [ ! -f "$TEST_FILE" ]; then
             echo -e "${RED}Error: Test file not found: $TEST_FILE${NC}"
@@ -136,10 +177,10 @@ run_tests() {
 # テスト結果の表示
 show_results() {
     local exit_code=$1
-    
+
     echo ""
     echo -e "${BLUE}=== Test Results ===${NC}"
-    
+
     if [ $exit_code -eq 0 ]; then
         echo -e "${GREEN}✓ All tests passed!${NC}"
     else
@@ -151,21 +192,21 @@ show_results() {
         echo "  - Run with -v flag for verbose output"
         echo "  - Check individual test files for specific failures"
     fi
-    
+
     return $exit_code
 }
 
 # メイン処理
 main() {
     echo -e "${YELLOW}Preparing test environment...${NC}"
-    
+
     # 事前クリーンアップ
     cleanup_before_test
-    
+
     # テストの実行
     echo -e "${YELLOW}Starting tests...${NC}"
     echo ""
-    
+
     if run_tests; then
         show_results 0
     else

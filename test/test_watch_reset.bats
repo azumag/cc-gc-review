@@ -2,8 +2,15 @@
 
 # test_watch_reset.bats - Tests for watch functions and reset behavior
 
-load "test_helper/bats-support/load.bash"
-load "test_helper/bats-assert/load.bash"
+# Load bats helper libraries
+# In CI, the working directory is already in test/, so we need to handle both cases
+if [[ -f "test_helper/bats-support/load.bash" ]]; then
+    source "test_helper/bats-support/load.bash"
+    source "test_helper/bats-assert/load.bash"
+elif [[ -f "../test/test_helper/bats-support/load.bash" ]]; then
+    source "../test/test_helper/bats-support/load.bash"
+    source "../test/test_helper/bats-assert/load.bash"
+fi
 
 setup() {
     # Clean up any leftover test directories first
@@ -14,7 +21,8 @@ setup() {
     # Use mktemp for safer temporary directory creation
     export TEST_TMP_DIR
     TEST_TMP_DIR=$(mktemp -d)
-    export SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")"/.. && pwd)"
+    export SCRIPT_DIR
     export TEST_REVIEW_FILE="$TEST_TMP_DIR/gemini-review"
     export TEST_COUNT_FILE="$TEST_TMP_DIR/cc-gc-review-count"
     
@@ -81,7 +89,8 @@ teardown() {
     
     # Simulate file update (what currently happens)
     if [[ -f "$watch_file" ]]; then
-        local content=$(cat "$watch_file")
+        local content
+    content=$(cat "$watch_file")
         if [[ -n "$content" ]]; then
             # This is the problematic part - the count is reset here
             # In the current implementation, this would delete the count file
@@ -136,7 +145,7 @@ teardown() {
     # Next review should be passed and count reset
     run send_review_to_tmux "$TEST_SESSION" "Fourth review (should be passed)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "🚫 Review limit reached (3/3)" ]]
+    [[ "$output" =~ Review\ limit\ reached\ \(3/3\) ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted
@@ -200,12 +209,12 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
-    MAX_REVIEWS=4
-    INFINITE_REVIEW=false
-    REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
-    THINK_MODE=false
-    CUSTOM_COMMAND=""
-    CC_GC_REVIEW_TEST_MODE=true
+    export MAX_REVIEWS=4
+    export INFINITE_REVIEW=false
+    export REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
+    export THINK_MODE=false
+    export CUSTOM_COMMAND=""
+    export CC_GC_REVIEW_TEST_MODE=true
     
     # Test that new implementation preserves count correctly
     echo "1" > "$TEST_COUNT_FILE"
@@ -237,12 +246,12 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
-    MAX_REVIEWS=2
-    INFINITE_REVIEW=false
-    REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
-    THINK_MODE=false
-    CUSTOM_COMMAND=""
-    CC_GC_REVIEW_TEST_MODE=true
+    export MAX_REVIEWS=2
+    export INFINITE_REVIEW=false
+    export REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
+    export THINK_MODE=false
+    export CUSTOM_COMMAND=""
+    export CC_GC_REVIEW_TEST_MODE=true
     
     # Test that reset ONLY happens when limit is reached
     
@@ -260,7 +269,7 @@ teardown() {
     # Third review - should be passed and trigger reset
     run send_review_to_tmux "$TEST_SESSION" "Third review (should be passed)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "🚫 Review limit reached (2/2)" ]]
+    [[ "$output" =~ Review\ limit\ reached\ \(2/2\) ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted after reset

@@ -34,11 +34,6 @@ jobs:
         bats --version
         which bats
         
-    - name: Install bats helpers
-      run: |
-        git clone https://github.com/bats-core/bats-support.git test/test_helper/bats-support
-        git clone https://github.com/bats-core/bats-assert.git test/test_helper/bats-assert
-        
     - name: Make scripts executable
       run: |
         chmod +x *.sh
@@ -53,14 +48,6 @@ jobs:
       run: |
         cd test
         ./run_tests.sh --verbose
-        
-    - name: Run specific test suites
-      run: |
-        cd test
-        echo "Running cc-gc-review tests..."
-        ./run_tests.sh --file test_cc_gc_review.bats --verbose
-        echo "Running hook-handler tests..."
-        ./run_tests.sh --file test_hook_handler.bats --verbose
         
     - name: Test with different shell configurations
       run: |
@@ -162,7 +149,7 @@ jobs:
         if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
           sudo ./install.sh /usr/local
         else
-          ./install.sh /usr/local
+          sudo ./install.sh /usr/local
         fi
         
     - name: Test script compatibility
