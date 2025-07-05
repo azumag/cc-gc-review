@@ -1,5 +1,9 @@
 #!/usr/bin/env bats
 
+load test_helper/bats-support/load.bash
+load test_helper/bats-assert/load.bash
+load test_helper/bats-file/load.bash
+
 # test_review_count.bats - Review count functionality tests
 
 # Load bats helper libraries

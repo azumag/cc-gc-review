@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 
-load test_helper/bats-support/load
-load test_helper/bats-assert/load
-load test_helper/bats-file/load
+load test_helper/bats-support/load.bash
+load test_helper/bats-assert/load.bash
+load test_helper/bats-file/load.bash
 
 setup() {
     TEST_TEMP_DIR=$(mktemp -d -t cc-gc-test-XXXXXX)

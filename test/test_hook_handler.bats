@@ -1,5 +1,9 @@
 #!/usr/bin/env bats
 
+load test_helper/bats-support/load.bash
+load test_helper/bats-assert/load.bash
+load test_helper/bats-file/load.bash
+
 # test_hook_handler.bats - hook-handler.sh のテスト (TDD approach)
 
 setup() {

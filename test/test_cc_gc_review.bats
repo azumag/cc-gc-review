@@ -1,5 +1,9 @@
 #!/usr/bin/env bats
 
+load test_helper/bats-support/load.bash
+load test_helper/bats-assert/load.bash
+load test_helper/bats-file/load.bash
+
 # test_cc_gc_review.bats - cc-gc-review.sh のテスト (TDD approach)
 
 setup() {
