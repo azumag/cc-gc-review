@@ -36,7 +36,8 @@ chmod +x *.sh
 
 ```bash
 # 基本的な使い方
-./cc-gen-review.sh claude
+# tmux pane として 'claude' を指定
+./cc-gen-review.sh claude 
 
 # 自動でClaudeも起動
 ./cc-gen-review.sh -c claude
@@ -75,6 +76,16 @@ tmux attach-session -t claude
 
 `~/.claude/settings.json`に以下を追加：
 
+基本的な設定：
+```json
+{
+  "hooks": {
+    "stop": "/path/to/cc-gen-review/hook-handler.sh"
+  }
+}
+```
+
+git diff を確認する設定：
 ```json
 {
   "hooks": {
@@ -92,15 +103,6 @@ git commitを確認する設定：
 }
 ```
 
-基本的な設定（git diff/commitなし）：
-```json
-{
-  "hooks": {
-    "stop": "/path/to/cc-gen-review/hook-handler.sh"
-  }
-}
-```
-
 #### hook-handler.shのオプション
 
 | オプション | 説明 |
@@ -110,6 +112,7 @@ git commitを確認する設定：
 | `--yolo`, `-y` | Geminiをyoloモード（-y）で実行 |
 
 **注意**: `--git-diff`や`--git-commit`オプションを使用すると、自動的に`--yolo`モードも有効になります。これはGeminiがgitコマンドを実行する際に確認プロンプトを表示させないためです。
+安全のため、`-s` のサンドボックスモードはデフォルトでオンにしています。
 
 レビューファイルは固定で`/tmp/gemini-review`に出力されます。
 
@@ -119,7 +122,7 @@ git commitを確認する設定：
 export CC_GEN_REVIEW_VERBOSE="true"
 ```
 
-## オプション
+## cc-gen-review のオプション
 
 | オプション | 説明 |
 |-----------|------|
