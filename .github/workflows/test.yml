@@ -21,7 +21,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y tmux jq coreutils
+        sudo apt-get install -y tmux jq coreutils timeout
         
     - name: Install bats-core
       run: |
@@ -33,11 +33,6 @@ jobs:
       run: |
         bats --version
         which bats
-        
-    - name: Install bats helpers
-      run: |
-        git clone https://github.com/bats-core/bats-support.git test/test_helper/bats-support
-        git clone https://github.com/bats-core/bats-assert.git test/test_helper/bats-assert
         
     - name: Make scripts executable
       run: |
@@ -53,14 +48,6 @@ jobs:
       run: |
         cd test
         ./run_tests.sh --verbose
-        
-    - name: Run specific test suites
-      run: |
-        cd test
-        echo "Running cc-gc-review tests..."
-        ./run_tests.sh --file test_cc_gc_review.bats --verbose
-        echo "Running hook-handler tests..."
-        ./run_tests.sh --file test_hook_handler.bats --verbose
         
     - name: Test with different shell configurations
       run: |
