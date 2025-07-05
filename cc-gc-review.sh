@@ -216,11 +216,17 @@ prompt_for_continuation() {
         return 0
     fi
     
+    # バックグラウンド実行やパイプ経由の場合はスキップ
+    if [[ ! -t 0 ]] || [[ ! -t 1 ]]; then
+        echo "▶️  バックグラウンド実行モード: 自動で続行します"
+        return 0
+    fi
+    
     echo "続行します"
     echo "停止するには 'n' を入力してください (10秒後に自動で続行):"
     
     local input=""
-    if read -t 10 -r input; then
+    if read -t 10 -r input 2>/dev/null; then
         # ユーザーが何か入力した場合
         if [[ $input == "n" || $input == "N" ]]; then
             echo "❌ ユーザーによりレビューループを停止しました"
@@ -230,7 +236,7 @@ prompt_for_continuation() {
             return 0  # 続行
         fi
     else
-        # タイムアウトした場合（10秒経過）
+        # タイムアウトした場合（10秒経過）またはread失敗の場合
         echo "▶️  タイムアウトしました。続行します"
         return 0  # 続行
     fi
