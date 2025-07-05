@@ -298,7 +298,7 @@ EOF
     run bash -c "cd '$test_dir' && echo '$test_json' | '$SCRIPT_DIR/hook-handler.sh'"
     
     [ "$status" -eq 0 ]
-    [[ "$output" =~ Working directory: $test_dir ]]
+    [[ "$output" =~ "Working directory: $test_dir" ]]
 }
 
 @test "should handle complex transcript content with special characters" {
