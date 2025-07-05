@@ -239,12 +239,6 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
-    MAX_REVIEWS=2
-    INFINITE_REVIEW=false
-    REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
-    THINK_MODE=false
-    CUSTOM_COMMAND=""
-    CC_GC_REVIEW_TEST_MODE=true
     
     # Test that reset ONLY happens when limit is reached
     

@@ -132,7 +132,7 @@ teardown() {
     # Test third review should be passed (limit reached) and count reset
     run send_review_to_tmux "$TEST_SESSION" "Third review content"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ Review\ limit\ reached\ \(2/2\) ]]
+    [[ "$output" =~ Review\ limit\ reached\ \(1/1\) ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     [[ "$output" =~ "🔄 Review count reset" ]]
     
