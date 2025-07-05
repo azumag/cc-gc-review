@@ -142,6 +142,11 @@ setup_ci_environment
 run_tests() {
     local bats_options=""
 
+    # Batsヘルパーライブラリを明示的にソースする
+    # CI環境のワーキングディレクトリがtest/であるため、相対パスで指定
+    source test_helper/bats-support/load.bash
+    source test_helper/bats-assert/load.bash
+
     if [ "$VERBOSE" = true ]; then
         bats_options="--verbose-run"
     fi
