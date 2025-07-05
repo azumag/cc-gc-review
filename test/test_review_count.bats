@@ -22,6 +22,14 @@ setup() {
     # Set up cleanup trap
     trap 'cleanup_test_env' EXIT INT TERM
     
+    # CI環境対応
+    if [ "${CI:-false}" = "true" ]; then
+        export TMUX_TMPDIR=/tmp
+        export TERM=xterm-256color
+        # CI環境での長めの待機時間
+        export BATS_TEST_TIMEOUT=30
+    fi
+    
     # Mock git settings
     export GIT_AUTHOR_NAME="Test User"
     export GIT_AUTHOR_EMAIL="test@example.com"
@@ -30,8 +38,13 @@ setup() {
 }
 
 cleanup_test_env() {
-    # Clean up tmux session
-    tmux kill-session -t "$TEST_SESSION" 2>/dev/null || true
+    # Clean up tmux session with retry
+    local retry_count=0
+    while [ $retry_count -lt 3 ] && tmux has-session -t "$TEST_SESSION" 2>/dev/null; do
+        tmux kill-session -t "$TEST_SESSION" 2>/dev/null || true
+        sleep 1
+        ((retry_count++))
+    done
     
     # Clean up test directories
     if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
@@ -50,8 +63,20 @@ teardown() {
 }
 
 @test "review count should increment correctly" {
-    # Create tmux session
-    tmux new-session -d -s "$TEST_SESSION"
+    # CI環境でのtmuxセッション作成の堅牢性向上
+    local session_created=false
+    local retry_count=0
+    
+    while [ $retry_count -lt 3 ] && [ "$session_created" = false ]; do
+        if tmux new-session -d -s "$TEST_SESSION" 2>/dev/null; then
+            session_created=true
+        else
+            sleep 2
+            ((retry_count++))
+        fi
+    done
+    
+    [ "$session_created" = true ] || skip "Could not create tmux session"
     
     # Test the send_review_to_tmux function directly
     # First, we need to source the script to get the function

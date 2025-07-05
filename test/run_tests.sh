@@ -74,13 +74,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# 必要なツールの確認
-if ! command -v bats >/dev/null 2>&1; then
-    echo -e "${RED}Error: bats is not installed${NC}"
-    echo "Please run: ./setup_test.sh"
-    exit 1
-fi
-
 # テスト前のクリーンアップ
 cleanup_before_test() {
     echo -e "${YELLOW}Cleaning up test environment...${NC}"
@@ -99,6 +92,47 @@ cleanup_before_test() {
 
     echo -e "${GREEN}✓ Cleanup completed${NC}"
 }
+
+# CI環境の検出と対応
+setup_ci_environment() {
+    if [ "${CI:-false}" = "true" ]; then
+        echo -e "${YELLOW}CI environment detected, applying CI-specific settings...${NC}"
+        
+        # CI環境でのtmuxの初期化
+        export TMUX_TMPDIR=/tmp
+        
+        # CI環境での表示設定
+        export TERM=xterm-256color
+        
+        # Batsヘルパーライブラリの自動セットアップ
+        if [ ! -d "test_helper/bats-support" ] || [ ! -d "test_helper/bats-assert" ]; then
+            echo -e "${YELLOW}Setting up bats helper libraries for CI...${NC}"
+            mkdir -p test_helper
+            
+            # bats-supportをダウンロード
+            if [ ! -d "test_helper/bats-support" ]; then
+                git clone --depth 1 https://github.com/bats-core/bats-support.git test_helper/bats-support
+            fi
+            
+            # bats-assertをダウンロード
+            if [ ! -d "test_helper/bats-assert" ]; then
+                git clone --depth 1 https://github.com/bats-core/bats-assert.git test_helper/bats-assert
+            fi
+        fi
+        
+        echo -e "${GREEN}✓ CI environment setup completed${NC}"
+    fi
+}
+
+# 必要なツールの確認
+if ! command -v bats >/dev/null 2>&1; then
+    echo -e "${RED}Error: bats is not installed${NC}"
+    echo "Please run: ./setup_test.sh"
+    exit 1
+fi
+
+# CI環境のセットアップ
+setup_ci_environment
 
 # テスト実行
 run_tests() {

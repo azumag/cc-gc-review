@@ -46,10 +46,28 @@ fi
 
 # テスト用ディレクトリの作成
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-mkdir -p "$TEST_DIR/tmp"
+mkdir -p "$TEST_DIR/test_helper"
+
+# Batsヘルパーライブラリのセットアップ
+echo -e "${YELLOW}Setting up bats helper libraries...${NC}"
+
+# bats-supportをクローン/更新
+if [ ! -d "$TEST_DIR/test_helper/bats-support" ]; then
+    git clone https://github.com/bats-core/bats-support.git "$TEST_DIR/test_helper/bats-support"
+else
+    echo "bats-support already exists, skipping clone"
+fi
+
+# bats-assertをクローン/更新
+if [ ! -d "$TEST_DIR/test_helper/bats-assert" ]; then
+    git clone https://github.com/bats-core/bats-assert.git "$TEST_DIR/test_helper/bats-assert"
+else
+    echo "bats-assert already exists, skipping clone"
+fi
 
 echo -e "${GREEN}✓ All required tools are installed${NC}"
 echo -e "${GREEN}✓ Test directory prepared${NC}"
+echo -e "${GREEN}✓ Bats helper libraries installed${NC}"
 
 # Batsのバージョン確認
 echo "Bats version: $(bats --version)"
@@ -61,3 +79,4 @@ echo "To run tests:"
 echo "  cd $TEST_DIR"
 echo "  bats test_*.bats"
 echo "  or: ./run_tests.sh"
+echo "  or: ./test.sh (standalone test)"
