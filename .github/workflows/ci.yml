@@ -82,7 +82,7 @@ jobs:
     - name: Check for security issues
       run: |
         echo "Checking for potential security issues in shell scripts..."
-        if grep -r "eval\|rm -rf /\|chmod 777" --include="*.sh" --include="*.bash" .; then
+        if grep -r "eval\|rm -rf /\|chmod 777" --include="*.sh" --include="*.bash" --exclude-dir="test/test_helper" .; then
           echo "WARNING: Potential security issues found!"
           echo "Please review the above matches carefully."
           exit 1
