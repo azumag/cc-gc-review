@@ -247,7 +247,8 @@ watch_review_files() {
     if [[ -f "$watch_file" ]]; then
         if [[ "$RESEND_EXISTING" == true ]]; then
             log "Existing review file found, resending due to --resend option"
-            local content=$(cat "$watch_file")
+            local content
+            content=$(cat "$watch_file")
             if [[ -n "$content" ]]; then
                 echo "🔄 Resending existing review file..."
                 send_review_to_tmux "$session" "$content"
@@ -286,7 +287,8 @@ watch_with_inotify() {
     
     while true; do
         # Use a temporary file to avoid subshell issues with pipe
-        local tmp_output="$(mktemp)"
+        local tmp_output
+        tmp_output="$(mktemp)"
         inotifywait -e modify,create "/tmp" 2>/dev/null > "$tmp_output"
         
         while read -r dir event file; do
@@ -295,7 +297,8 @@ watch_with_inotify() {
                 log "Detected change in: $filepath"
                 
                 if [[ -f "$filepath" ]]; then
-                    local content=$(cat "$filepath")
+                    local content
+                    content=$(cat "$filepath")
                     if [[ -n "$content" ]]; then
                         echo "🔔 New review detected via inotifywait!"
                         
@@ -332,7 +335,8 @@ watch_with_fswatch() {
         log "Detected change in: $filepath"
         
         if [[ -f "$filepath" ]]; then
-            local content=$(cat "$filepath")
+            local content
+            content=$(cat "$filepath")
             if [[ -n "$content" ]]; then
                 echo "🔔 New review detected via fswatch!"
                 
@@ -370,13 +374,15 @@ watch_with_polling() {
     
     while true; do
         if [[ -f "$watch_file" ]]; then
-            local current_mtime=$(stat -c %Y "$watch_file" 2>/dev/null || stat -f %m "$watch_file" 2>/dev/null)
+            local current_mtime
+            current_mtime=$(stat -c %Y "$watch_file" 2>/dev/null || stat -f %m "$watch_file" 2>/dev/null)
             
             if [[ "$current_mtime" != "$last_mtime" ]]; then
                 log "Detected file change: $watch_file (mtime: $current_mtime)"
                 last_mtime="$current_mtime"
                 
-                local content=$(cat "$watch_file")
+                local content
+                content=$(cat "$watch_file")
                 if [[ -n "$content" ]]; then
                     echo "🔔 New review detected via polling!"
                     log "Sending review content (${#content} chars) to session: $session"

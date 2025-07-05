@@ -97,10 +97,6 @@ install_bats_helpers() {
         git clone https://github.com/bats-core/bats-assert.git "$helper_dir/bats-assert"
     fi
     
-    # Install bats-file
-    if [ ! -d "$helper_dir/bats-file" ]; then
-        git clone https://github.com/bats-core/bats-file.git "$helper_dir/bats-file"
-    fi
     
     echo -e "${GREEN}✓ Bats helper libraries installed${NC}"
 }
@@ -162,7 +158,7 @@ verify_installation() {
     local test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local helper_dir="$test_dir/test_helper"
     
-    for helper in bats-support bats-assert bats-file; do
+    for helper in bats-support bats-assert; do
         if [ -d "$helper_dir/$helper" ]; then
             echo -e "${GREEN}✓ $helper: installed${NC}"
         else
