@@ -91,6 +91,11 @@ cleanup_before_test() {
     # テスト用一時ファイルを削除
     rm -rf ./test-tmp-* 2>/dev/null || true
     rm -f /tmp/gemini-review* 2>/dev/null || true
+    rm -f /tmp/gemini-prompt* 2>/dev/null || true
+    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
+    
+    # mktemp で作成された一時ディレクトリも削除
+    find /tmp -maxdepth 1 -name "tmp.*" -type d -user "$(whoami)" -mtime +1 -exec rm -rf {} + 2>/dev/null || true
     
     echo -e "${GREEN}✓ Cleanup completed${NC}"
 }

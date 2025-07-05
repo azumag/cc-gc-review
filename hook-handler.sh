@@ -11,7 +11,9 @@ VERBOSE="${CC_GC_REVIEW_VERBOSE:-false}"
 GIT_DIFF_MODE=false
 GIT_COMMIT_MODE=false
 YOLO_MODE=false
-LOG_FILE="/tmp/cc-gc-review-hook.log"
+LOG_FILE=$(mktemp /tmp/cc-gc-review-hook.log.XXXXXX)
+# 環境変数から監視ファイルパスを取得、なければデフォルトの固定パス（非推奨）
+WATCH_FILE="${CC_GC_REVIEW_WATCH_FILE:-/tmp/gemini-review}"
 
 # ログ関数
 log() {
@@ -92,9 +94,11 @@ $summary
 
 レビュー結果:"
     
-    # プロンプトを/tmp/gemini-promptに出力
-    echo "$prompt" > "/tmp/gemini-prompt"
-    log "Prompt written to: /tmp/gemini-prompt"
+    # プロンプトを一時ファイルに出力
+    local prompt_file
+    prompt_file=$(mktemp /tmp/gemini-prompt.XXXXXX)
+    echo "$prompt" > "$prompt_file"
+    log "Prompt written to: $prompt_file"
     
     # gemini-cliを使用してレビューを実行
     if command -v gemini >/dev/null 2>&1; then
@@ -114,43 +118,50 @@ $summary
         local start_time
         start_time=$(date +%s)
         
-        # geminiプロセスをタイムアウト付きで実行（手動管理）
+        # geminiプロセスをタイムアウト付きで実行
         local gemini_timeout=120  # 2分でタイムアウト
-        
-        log "Manual timeout management for gemini execution (${gemini_timeout}s)"
-        echo "$prompt" | gemini $gemini_options > "$temp_stdout" 2> "$temp_stderr" &
-        local gemini_pid=$!
-        log "Started gemini process with PID: $gemini_pid"
-        
-        # プロセス完了をタイムアウト付きで待つ
-        local wait_count=0
         local gemini_exit_code=124  # デフォルトはタイムアウト
-        while [[ $wait_count -lt $gemini_timeout ]]; do
-            if ! kill -0 $gemini_pid 2>/dev/null; then
-                # プロセス終了
-                wait $gemini_pid
-                local gemini_exit_code=$?
-                log "Gemini process completed after ${wait_count} seconds with exit code: $gemini_exit_code"
-                break
-            fi
-            sleep 1
-            ((wait_count++))
-            
-            # 進捗ログ（10秒ごと）
-            if [[ $((wait_count % 10)) -eq 0 ]]; then
-                log "Waiting for gemini... ${wait_count}/${gemini_timeout}s"
-            fi
-        done
         
-        # タイムアウト時の処理
-        if [[ $wait_count -ge $gemini_timeout ]]; then
-            log "Gemini process timeout after ${gemini_timeout} seconds, killing process"
-            kill -TERM $gemini_pid 2>/dev/null || true
-            sleep 2
-            kill -KILL $gemini_pid 2>/dev/null || true
-            wait $gemini_pid 2>/dev/null || true  # 確実にプロセス回収
-            local gemini_exit_code=124  # timeout exit code
-            log "Gemini process killed due to timeout"
+        if command -v timeout >/dev/null 2>&1; then
+            log "Using 'timeout' command for gemini execution (${gemini_timeout}s)"
+            timeout ${gemini_timeout}s bash -c "echo '$prompt' | gemini $gemini_options" > "$temp_stdout" 2> "$temp_stderr"
+            gemini_exit_code=$?
+        else
+            log "Warning: 'timeout' command not found. Using manual timeout management."
+            
+            echo "$prompt" | gemini $gemini_options > "$temp_stdout" 2> "$temp_stderr" &
+            local gemini_pid=$!
+            log "Started gemini process with PID: $gemini_pid"
+            
+            # プロセス完了をタイムアウト付きで待つ
+            local wait_count=0
+            while [[ $wait_count -lt $gemini_timeout ]]; do
+                if ! kill -0 $gemini_pid 2>/dev/null; then
+                    # プロセス終了
+                    wait $gemini_pid
+                    gemini_exit_code=$?
+                    log "Gemini process completed after ${wait_count} seconds with exit code: $gemini_exit_code"
+                    break
+                fi
+                sleep 1
+                ((wait_count++))
+                
+                # 進捗ログ（10秒ごと）
+                if [[ $((wait_count % 10)) -eq 0 ]]; then
+                    log "Waiting for gemini... ${wait_count}/${gemini_timeout}s"
+                fi
+            done
+            
+            # タイムアウト時の処理
+            if [[ $wait_count -ge $gemini_timeout ]]; then
+                log "Gemini process timeout after ${gemini_timeout} seconds, killing process"
+                kill -TERM $gemini_pid 2>/dev/null || true
+                sleep 2
+                kill -KILL $gemini_pid 2>/dev/null || true
+                wait $gemini_pid 2>/dev/null || true  # 確実にプロセス回収
+                gemini_exit_code=124  # timeout exit code
+                log "Gemini process killed due to timeout"
+            fi
         fi
         
         # 結果待機（短時間）
@@ -221,40 +232,47 @@ $summary
             local flash_start_time
             flash_start_time=$(date +%s)
             
-            # Flashモデルもタイムアウト付きで実行（手動管理）
-            log "Manual timeout management for Flash model execution (${gemini_timeout}s)"
-            echo "$prompt" | gemini $gemini_options > "$temp_stdout" 2> "$temp_stderr" &
-            local flash_pid=$!
-            log "Started Flash model process with PID: $flash_pid"
-            
-            # プロセス完了をタイムアウト付きで待つ
-            local flash_wait_count=0
-            gemini_exit_code=124  # デフォルトはタイムアウト
-            while [[ $flash_wait_count -lt $gemini_timeout ]]; do
-                if ! kill -0 $flash_pid 2>/dev/null; then
-                    wait $flash_pid
-                    gemini_exit_code=$?
-                    log "Flash model process completed after ${flash_wait_count} seconds with exit code: $gemini_exit_code"
-                    break
-                fi
-                sleep 1
-                ((flash_wait_count++))
+            # Flashモデルもタイムアウト付きで実行
+            if command -v timeout >/dev/null 2>&1; then
+                log "Using 'timeout' command for Flash model execution (${gemini_timeout}s)"
+                timeout ${gemini_timeout}s bash -c "echo '$prompt' | gemini $gemini_options" > "$temp_stdout" 2> "$temp_stderr"
+                gemini_exit_code=$?
+            else
+                log "Warning: 'timeout' command not found. Using manual timeout management for Flash model."
                 
-                # 進捗ログ（10秒ごと）
-                if [[ $((flash_wait_count % 10)) -eq 0 ]]; then
-                    log "Waiting for Flash model... ${flash_wait_count}/${gemini_timeout}s"
+                echo "$prompt" | gemini $gemini_options > "$temp_stdout" 2> "$temp_stderr" &
+                local flash_pid=$!
+                log "Started Flash model process with PID: $flash_pid"
+                
+                # プロセス完了をタイムアウト付きで待つ
+                local flash_wait_count=0
+                gemini_exit_code=124  # デフォルトはタイムアウト
+                while [[ $flash_wait_count -lt $gemini_timeout ]]; do
+                    if ! kill -0 $flash_pid 2>/dev/null; then
+                        wait $flash_pid
+                        gemini_exit_code=$?
+                        log "Flash model process completed after ${flash_wait_count} seconds with exit code: $gemini_exit_code"
+                        break
+                    fi
+                    sleep 1
+                    ((flash_wait_count++))
+                    
+                    # 進捗ログ（10秒ごと）
+                    if [[ $((flash_wait_count % 10)) -eq 0 ]]; then
+                        log "Waiting for Flash model... ${flash_wait_count}/${gemini_timeout}s"
+                    fi
+                done
+                
+                # タイムアウト時の処理
+                if [[ $flash_wait_count -ge $gemini_timeout ]]; then
+                    log "Flash model process timeout after ${gemini_timeout} seconds, killing process"
+                    kill -TERM $flash_pid 2>/dev/null || true
+                    sleep 2
+                    kill -KILL $flash_pid 2>/dev/null || true
+                    wait $flash_pid 2>/dev/null || true  # 確実にプロセス回収
+                    gemini_exit_code=124  # timeout exit code
+                    log "Flash model process killed due to timeout"
                 fi
-            done
-            
-            # タイムアウト時の処理
-            if [[ $flash_wait_count -ge $gemini_timeout ]]; then
-                log "Flash model process timeout after ${gemini_timeout} seconds, killing process"
-                kill -TERM $flash_pid 2>/dev/null || true
-                sleep 2
-                kill -KILL $flash_pid 2>/dev/null || true
-                wait $flash_pid 2>/dev/null || true  # 確実にプロセス回収
-                gemini_exit_code=124  # timeout exit code
-                log "Flash model process killed due to timeout"
             fi
             
             # Flashモデルでも結果待機（短時間）
@@ -315,10 +333,11 @@ $summary
         fi
         
         # 一時ファイルのクリーンアップ
-        rm -f "$temp_stdout" "$temp_stderr"
+        rm -f "$temp_stdout" "$temp_stderr" "$prompt_file"
     else
         # gemini-cliがない場合はスキップ
         log "Warning: gemini command not found, skipping review"
+        rm -f "$prompt_file"
         return 1  # レビューファイルを作成しない
     fi
     
@@ -386,13 +405,30 @@ main() {
     input=$(cat)
     log "Received input: $input"
     
+    # jqコマンドの存在確認
+    if ! command -v jq >/dev/null 2>&1; then
+        log "ERROR: jq command not found. Please install jq first."
+        exit 0
+    fi
+    
     # JSONパース
     local session_id
-    session_id=$(echo "$input" | jq -r '.session_id' 2>/dev/null || echo "")
+    session_id=$(echo "$input" | jq -r '.session_id' 2>/dev/null)
     local transcript_path
-    transcript_path=$(echo "$input" | jq -r '.transcript_path' 2>/dev/null || echo "")
+    transcript_path=$(echo "$input" | jq -r '.transcript_path' 2>/dev/null)
     local stop_hook_active
-    stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active' 2>/dev/null || echo "false")
+    stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active' 2>/dev/null)
+    
+    # jqのパース結果を検証
+    if [[ "$session_id" == "null" ]]; then
+        session_id=""
+    fi
+    if [[ "$transcript_path" == "null" ]]; then
+        transcript_path=""
+    fi
+    if [[ "$stop_hook_active" == "null" ]]; then
+        stop_hook_active="false"
+    fi
     
     # 必須パラメータのチェック
     if [[ -z "$transcript_path" ]]; then
@@ -426,7 +462,7 @@ main() {
     fi
     
     # レビューファイル名
-    local review_file="/tmp/gemini-review"
+    local review_file="$WATCH_FILE"
     
     # Geminiレビューの実行
     if run_gemini_review "$work_summary" "$review_file"; then

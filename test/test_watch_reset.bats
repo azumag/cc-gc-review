@@ -6,15 +6,20 @@ load "test_helper/bats-support/load.bash"
 load "test_helper/bats-assert/load.bash"
 
 setup() {
+    # Clean up any leftover test directories first
+    rm -rf ./test-tmp-* 2>/dev/null || true
+    
     # Test configuration
     export TEST_SESSION="test-watch-$$"
-    export TEST_TMP_DIR="./test-tmp-$$"
+    # Use mktemp for safer temporary directory creation
+    export TEST_TMP_DIR
+    TEST_TMP_DIR=$(mktemp -d)
     export SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
     export TEST_REVIEW_FILE="$TEST_TMP_DIR/gemini-review"
     export TEST_COUNT_FILE="$TEST_TMP_DIR/cc-gc-review-count"
     
-    # Create test directory
-    mkdir -p "$TEST_TMP_DIR"
+    # Set up cleanup trap
+    trap 'cleanup_test_env' EXIT INT TERM
     
     # Mock git settings
     export GIT_AUTHOR_NAME="Test User"
@@ -23,19 +28,27 @@ setup() {
     export GIT_COMMITTER_EMAIL="test@example.com"
 }
 
-teardown() {
+cleanup_test_env() {
     # Clean up tmux session
     tmux kill-session -t "$TEST_SESSION" 2>/dev/null || true
     
     # Clean up test directories
-    rm -rf "$TEST_TMP_DIR"
+    if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
+        rm -rf "$TEST_TMP_DIR"
+    fi
     
-    # Clean up any test files
-    rm -f /tmp/gemini-review-* 2>/dev/null || true
-    rm -f /tmp/cc-gc-review-count-* 2>/dev/null || true
+    # Clean up any remaining test files
+    rm -f /tmp/gemini-* 2>/dev/null || true
+    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
     
     # Kill any background processes
     jobs -p | xargs -r kill 2>/dev/null || true
+}
+
+teardown() {
+    # Cleanup is now handled by the trap in setup()
+    # Additional cleanup if needed can be added here
+    cleanup_test_env
 }
 
 @test "watch_with_polling should NOT reset count on same file updates" {
@@ -91,7 +104,7 @@ teardown() {
     fi
 }
 
-@test "count should only reset when new hook-handler session starts" {
+@test "count should only reset when limit is reached and passed" {
     # Create tmux session
     tmux new-session -d -s "$TEST_SESSION"
     
@@ -99,36 +112,40 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
-    MAX_REVIEWS=4
+    MAX_REVIEWS=3
     INFINITE_REVIEW=false
     REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
     THINK_MODE=false
     CUSTOM_COMMAND=""
     CC_GC_REVIEW_TEST_MODE=true
     
-    # Simulate a session with multiple reviews
-    echo "2" > "$TEST_COUNT_FILE"
-    
-    # Test that count continues from existing value
-    run send_review_to_tmux "$TEST_SESSION" "Continuing review"
+    # Test that count continues across multiple reviews
+    run send_review_to_tmux "$TEST_SESSION" "First review"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "📊 Review count: 3/4" ]]
+    [[ "$output" =~ "📊 Review count: 1/3" ]]
     
-    # Now simulate a NEW hook-handler session (this should reset the count)
-    # This would happen when Claude generates new code and hook-handler creates a fresh review
-    
-    # The reset should be tied to a new file creation timestamp or a specific signal
-    # For now, let's test manual reset
-    rm "$TEST_COUNT_FILE" 2>/dev/null || true
-    
-    # First review of new session should start from 1
-    run send_review_to_tmux "$TEST_SESSION" "New session review"
+    run send_review_to_tmux "$TEST_SESSION" "Second review"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "📊 Review count: 1/4" ]]
+    [[ "$output" =~ "📊 Review count: 2/3" ]]
     
-    # Check count file was created with value 1
-    run cat "$TEST_COUNT_FILE"
-    [ "$output" = "1" ]
+    run send_review_to_tmux "$TEST_SESSION" "Third review"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "📊 Review count: 3/3" ]]
+    [[ "$output" =~ "⚠️  Review limit will be reached" ]]
+    
+    # Next review should be passed and count reset
+    run send_review_to_tmux "$TEST_SESSION" "Fourth review (should be passed)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "🚫 Review limit reached (3/3)" ]]
+    [[ "$output" =~ "Passing this review and resetting count" ]]
+    
+    # Count file should be deleted
+    assert_file_not_exists "$TEST_COUNT_FILE"
+    
+    # Next review should start from 1 again
+    run send_review_to_tmux "$TEST_SESSION" "Fifth review (after reset)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "📊 Review count: 1/3" ]]
 }
 
 @test "polling function should preserve count across multiple file changes" {
@@ -175,7 +192,7 @@ teardown() {
     [ "$output" = "3" ]
 }
 
-@test "watch functions should handle count correctly" {
+@test "watch functions should handle count correctly with new specification" {
     # Create tmux session
     tmux new-session -d -s "$TEST_SESSION"
     
@@ -190,51 +207,29 @@ teardown() {
     CUSTOM_COMMAND=""
     CC_GC_REVIEW_TEST_MODE=true
     
-    # Test that current implementation has the bug
-    # Create initial count to simulate ongoing session
+    # Test that new implementation preserves count correctly
     echo "1" > "$TEST_COUNT_FILE"
     
-    # Simulate what the current watch_with_polling function does
-    local watch_file="$TEST_REVIEW_FILE"
-    local session="$TEST_SESSION"
+    # Test reset_review_count_if_needed function with new specification
+    run reset_review_count_if_needed "$TEST_REVIEW_FILE"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "auto-reset disabled in new specification" ]]
     
-    # Create review file
-    echo "Test review content" > "$watch_file"
+    # Count should be preserved (not reset)
+    run cat "$TEST_COUNT_FILE"
+    [ "$output" = "1" ]
     
-    # Current implementation (problematic) would reset count here
-    # Let's test this behavior to confirm it's wrong
+    # Subsequent review should increment from existing count
+    run send_review_to_tmux "$TEST_SESSION" "Test review content"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "📊 Review count: 2/4" ]]
     
-    # The bug is in these lines from the current implementation:
-    # if [[ -f "$REVIEW_COUNT_FILE" ]]; then
-    #     rm "$REVIEW_COUNT_FILE"
-    #     echo "🔄 Review count reset due to new file update"
-    # fi
-    
-    # Let's verify this is the problem
-    if [[ -f "$watch_file" ]]; then
-        local content=$(cat "$watch_file")
-        if [[ -n "$content" ]]; then
-            # This is what the current implementation does (WRONG):
-            if [[ -f "$REVIEW_COUNT_FILE" ]]; then
-                rm "$REVIEW_COUNT_FILE"
-                echo "🔄 Review count reset due to new file update"
-            fi
-            
-            # Then it calls send_review_to_tmux
-            run send_review_to_tmux "$session" "$content"
-            [ "$status" -eq 0 ]
-            
-            # This will always show 1/4 because count was reset
-            [[ "$output" =~ "📊 Review count: 1/4" ]]
-            
-            # This confirms the bug - the count is always 1 after reset
-            run cat "$TEST_COUNT_FILE"
-            [ "$output" = "1" ]
-        fi
-    fi
+    # Check count file has incremented correctly
+    run cat "$TEST_COUNT_FILE"
+    [ "$output" = "2" ]
 }
 
-@test "reset should only happen on genuine new file creation" {
+@test "reset should only happen when review limit is reached" {
     # Create tmux session
     tmux new-session -d -s "$TEST_SESSION"
     
@@ -242,33 +237,37 @@ teardown() {
     source "$SCRIPT_DIR/cc-gc-review.sh"
     
     # Override the necessary variables for testing
-    MAX_REVIEWS=4
+    MAX_REVIEWS=2
     INFINITE_REVIEW=false
     REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
     THINK_MODE=false
     CUSTOM_COMMAND=""
     CC_GC_REVIEW_TEST_MODE=true
     
-    # Test the ideal behavior: reset only on new hook-handler execution
+    # Test that reset ONLY happens when limit is reached
     
-    # Simulate existing session with some reviews
-    echo "2" > "$TEST_COUNT_FILE"
-    
-    # File update within same session should NOT reset count
-    run send_review_to_tmux "$TEST_SESSION" "Continuing review"
+    # First review
+    run send_review_to_tmux "$TEST_SESSION" "First review"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "📊 Review count: 3/4" ]]
+    [[ "$output" =~ "📊 Review count: 1/2" ]]
     
-    # Now simulate a NEW hook-handler execution
-    # This should be the ONLY time count is reset
-    # We need a way to detect this - perhaps by checking if the file is truly new
-    # or by using a different mechanism
-    
-    # For now, manual reset to simulate new hook-handler session
-    rm "$TEST_COUNT_FILE" 2>/dev/null || true
-    
-    # New session should start from 1
-    run send_review_to_tmux "$TEST_SESSION" "New hook-handler session"
+    # Second review - reaches limit
+    run send_review_to_tmux "$TEST_SESSION" "Second review"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "📊 Review count: 1/4" ]]
+    [[ "$output" =~ "📊 Review count: 2/2" ]]
+    [[ "$output" =~ "⚠️  Review limit will be reached" ]]
+    
+    # Third review - should be passed and trigger reset
+    run send_review_to_tmux "$TEST_SESSION" "Third review (should be passed)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "🚫 Review limit reached (2/2)" ]]
+    [[ "$output" =~ "Passing this review and resetting count" ]]
+    
+    # Count file should be deleted after reset
+    assert_file_not_exists "$TEST_COUNT_FILE"
+    
+    # Fourth review should start from 1 after reset
+    run send_review_to_tmux "$TEST_SESSION" "Fourth review (after reset)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "📊 Review count: 1/2" ]]
 }

@@ -7,7 +7,9 @@ set -euo pipefail
 # デフォルト値
 SESSION_NAME=""
 AUTO_CLAUDE_LAUNCH=false
-TMP_DIR="/tmp"
+TMP_DIR_BASE="/tmp"
+TMP_DIR=""
+WATCH_FILE=""
 THINK_MODE=false
 VERBOSE=false
 CUSTOM_COMMAND=""
@@ -115,13 +117,22 @@ parse_args() {
 setup_tmux_session() {
     local session="$1"
     
+    # tmuxコマンドの存在確認
+    if ! command -v tmux >/dev/null 2>&1; then
+        error "tmux command not found. Please install tmux first."
+    fi
+    
     if ! tmux has-session -t "$session" 2>/dev/null; then
         log "Creating new tmux session: $session"
-        tmux new-session -d -s "$session"
+        if ! tmux new-session -d -s "$session"; then
+            error "Failed to create tmux session: $session"
+        fi
         
         if [[ $AUTO_CLAUDE_LAUNCH == true ]]; then
             log "Launching Claude in session: $session"
-            tmux send-keys -t "$session" "claude" Enter
+            if ! tmux send-keys -t "$session" "claude" Enter; then
+                error "Failed to send keys to tmux session: $session"
+            fi
             sleep 2
         fi
     else
@@ -131,31 +142,13 @@ setup_tmux_session() {
 
 
 
-# レビューカウントリセット機能
+# レビューカウントリセット機能（新仕様では自動リセットしない）
+# この関数は将来的に削除予定
 reset_review_count_if_needed() {
     local filepath="$1"
-    
-    # カウントファイルが存在しない場合は何もしない
-    if [[ ! -f $REVIEW_COUNT_FILE ]]; then
-        return 0
-    fi
-    
-    # 現在のカウントを確認
-    local current_count
-    current_count=$(cat "$REVIEW_COUNT_FILE" 2>/dev/null || echo "0")
-    if ! [[ $current_count =~ ^[0-9]+$ ]]; then
-        current_count=0
-    fi
-    
-    # 制限に達していない場合は何もしない
-    if [[ $current_count -lt $MAX_REVIEWS ]]; then
-        return 0
-    fi
-    
-    # 制限に達している場合、カウントをリセット
-    echo "🔄 Review limit was reached. Resetting count due to new file update."
-    rm -f "$REVIEW_COUNT_FILE"
-    log "Review count reset due to new file update: $filepath"
+    # 新仕様では、ファイル更新時の自動リセットは行わない
+    # カウントリセットは、リミット到達後の次回レビューパス時のみ
+    log "File update detected: $filepath (auto-reset disabled in new specification)"
 }
 
 # レビュー結果をtmuxに送信
@@ -163,31 +156,28 @@ send_review_to_tmux() {
     local session="$1"
     local review_content="$2"
     
-    # レビュー数制限チェック
+    # レビュー数制限チェック（無限レビューでない場合）
     if [[ $INFINITE_REVIEW == false ]]; then
         local current_count=0
         if [[ -f $REVIEW_COUNT_FILE ]]; then
             current_count=$(cat "$REVIEW_COUNT_FILE" 2>/dev/null || echo "0")
-            # Ensure current_count is a valid number
-            if ! [[ $current_count =~ ^[0-9]+$ ]]; then
+            # Ensure current_count is a valid number in reasonable range
+            if ! [[ $current_count =~ ^[0-9]+$ ]] || [[ $current_count -lt 0 ]] || [[ $current_count -gt 9999 ]]; then
+                log "Warning: Invalid count value '$current_count', resetting to 0"
                 current_count=0
+                rm -f "$REVIEW_COUNT_FILE"
             fi
         fi
         
+        # リミットに達している場合は送信をパスしてカウントをリセット
         if [[ $current_count -ge $MAX_REVIEWS ]]; then
-            echo "🚫 Review limit reached ($current_count/$MAX_REVIEWS). Skipping this review."
-            echo "   To continue sending reviews, either:"
-            echo "   1. Use --infinite-review option"
-            echo "   2. Increase limit with --max-reviews N"
-            echo "   3. Remove count file: rm $REVIEW_COUNT_FILE"
-            echo "   4. Wait for next file update to reset count automatically"
+            echo "🚫 Review limit reached ($current_count/$MAX_REVIEWS). Passing this review and resetting count."
             echo "   📱 Will continue monitoring for new review files..."
+            # カウントをリセット
+            rm -f "$REVIEW_COUNT_FILE"
+            echo "🔄 Review count reset. Next review will be sent normally."
             return 1
         fi
-        
-        # レビューカウントを更新
-        echo $((current_count + 1)) >"$REVIEW_COUNT_FILE"
-        echo "📊 Review count: $((current_count + 1))/$MAX_REVIEWS"
     fi
     
     echo "📝 Review received (${#review_content} characters)"
@@ -200,12 +190,16 @@ think"
         echo "🤔 Think mode enabled - appending 'think' command"
     fi
     
-    # カスタムコマンドの場合はレビュー内容の先頭に追加
+    # カスタムコマンドの場合はレビュー内容の先頭に追加（セキュリティ対策：英数字とハイフンのみ許可）
     if [[ -n $CUSTOM_COMMAND ]]; then
-        review_content="/$CUSTOM_COMMAND
+        if [[ $CUSTOM_COMMAND =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            review_content="/$CUSTOM_COMMAND
 
 $review_content"
-        echo "⚡ Custom command enabled - prepending '/$CUSTOM_COMMAND'"
+            echo "⚡ Custom command enabled - prepending '/$CUSTOM_COMMAND'"
+        else
+            echo "⚠️  Warning: Custom command contains invalid characters. Ignoring: $CUSTOM_COMMAND"
+        fi
     fi
     
     echo "📤 Sending review to tmux session: $session"
@@ -214,15 +208,41 @@ $review_content"
     # レビュー内容を送信
     tmux send-keys -t "$session" "$review_content" Enter
     
-    # 5秒待ってから追加のEnterを送信
+    # 5秒待ってから追加のEnterを送信（Claude Codeのプロンプト処理を確実にするため）
     sleep 5
     tmux send-keys -t "$session" "" Enter
 
-    # 保険で再度送信
+    # 保険で再度送信（複数行のコンテンツが確実に送信されるようにするため）
     sleep 5
     tmux send-keys -t "$session" "" Enter
 
     echo "✅ Review sent successfully"
+    
+    # 送信後にカウントを更新（無限レビューでない場合）
+    if [[ $INFINITE_REVIEW == false ]]; then
+        local current_count=0
+        if [[ -f $REVIEW_COUNT_FILE ]]; then
+            current_count=$(cat "$REVIEW_COUNT_FILE" 2>/dev/null || echo "0")
+            # Ensure current_count is a valid number in reasonable range
+            if ! [[ $current_count =~ ^[0-9]+$ ]] || [[ $current_count -lt 0 ]] || [[ $current_count -gt 9999 ]]; then
+                log "Warning: Invalid count value '$current_count' after send, resetting to 0"
+                current_count=0
+            fi
+        fi
+        
+        # カウントを+1（アトミックな操作でファイル書き込み）
+        local new_count=$((current_count + 1))
+        local temp_count_file
+        temp_count_file=$(mktemp "${REVIEW_COUNT_FILE}.XXXXXX")
+        echo "$new_count" >"$temp_count_file"
+        mv "$temp_count_file" "$REVIEW_COUNT_FILE"
+        echo "📊 Review count: $new_count/$MAX_REVIEWS"
+        
+        # リミットに達したかチェック
+        if [[ $new_count -ge $MAX_REVIEWS ]]; then
+            echo "⚠️  Review limit will be reached. Next review will be passed and count will be reset."
+        fi
+    fi
     
     # ユーザーの続行確認を求める
     prompt_for_continuation
@@ -270,10 +290,47 @@ prompt_for_continuation() {
     fi
 }
 
+# レビューファイルを処理する共通関数
+process_review_file() {
+    local filepath="$1"
+    local session="$2"
+    
+    log "Detected change in: $filepath"
+    
+    if [[ ! -f "$filepath" ]]; then
+        log "File does not exist: $filepath"
+        return
+    fi
+    
+    local content
+    content=$(cat "$filepath")
+    if [[ -z "$content" ]]; then
+        log "Warning: File exists but content is empty"
+        return
+    fi
+    
+    echo "🔔 New review detected!"
+    
+    # レビューカウントリセットチェック
+    reset_review_count_if_needed "$filepath"
+    
+    set +e
+    send_review_to_tmux "$session" "$content"
+    local send_result=$?
+    set -e
+    
+    if [[ $send_result -eq 1 ]]; then
+        echo "⚠️  Review limit reached. Continuing to monitor..."
+    elif [[ $send_result -eq 2 ]]; then
+        echo "👋 Exiting watch mode by user request."
+        exit 0
+    fi
+}
+
 # ファイル監視
 watch_review_files() {
     local session="$1"
-    local watch_file="/tmp/gemini-review"
+    local watch_file="$WATCH_FILE"
     
     log "Starting file watch on: $watch_file"
     
@@ -291,7 +348,7 @@ watch_review_files() {
                 set -e  # Re-enable exit on error
                 
                 if [[ $send_result -eq 1 ]]; then
-                    echo "⚠️  Review limit reached during resend. Continuing to monitor..."
+                    echo "⚠️  Review limit reached during resend. Count has been reset. Continuing to monitor..."
                     # Continue to monitoring instead of exiting
                 elif [[ $send_result -eq 2 ]]; then
                     echo "👋 Exiting by user request during resend."
@@ -325,39 +382,14 @@ watch_with_inotify() {
         # Use a temporary file to avoid subshell issues with pipe
         local tmp_output
         tmp_output="$(mktemp)"
-        inotifywait -e modify,create "/tmp" 2>/dev/null > "$tmp_output"
+        local watch_dir
+        watch_dir="$(dirname "$watch_file")"
+        inotifywait -e modify,create "$watch_dir" 2>/dev/null > "$tmp_output"
         
         while read -r dir event file; do
-            if [[ "$file" == "gemini-review" ]]; then
+            if [[ "$file" == "$(basename "$watch_file")" ]]; then
                 local filepath="$dir$file"
-                log "Detected change in: $filepath"
-                
-                if [[ -f "$filepath" ]]; then
-                    local content
-                    content=$(cat "$filepath")
-                    if [[ -n "$content" ]]; then
-                        echo "🔔 New review detected via inotifywait!"
-                        
-                        # レビューカウントリセットチェック
-                        reset_review_count_if_needed "$filepath"
-                        
-                        set +e  # Temporarily disable exit on error
-                        send_review_to_tmux "$session" "$content"
-                        local send_result=$?
-                        set -e  # Re-enable exit on error
-                        
-                        if [[ $send_result -eq 1 ]]; then
-                            echo "⚠️  Review limit reached. Continuing to monitor for new files..."
-                            # Continue monitoring instead of exiting
-                        elif [[ $send_result -eq 2 ]]; then
-                            echo "👋 Exiting watch mode by user request."
-                            rm -f "$tmp_output"
-                            exit 0
-                        fi
-                    else
-                        log "Warning: File exists but content is empty"
-                    fi
-                fi
+                process_review_file "$filepath" "$session"
             fi
         done < "$tmp_output"
         
@@ -373,33 +405,7 @@ watch_with_fswatch() {
     log "Using fswatch for file monitoring"
     
     fswatch -0 "$watch_file" | while IFS= read -r -d '' filepath; do
-        log "Detected change in: $filepath"
-        
-        if [[ -f "$filepath" ]]; then
-            local content
-            content=$(cat "$filepath")
-            if [[ -n "$content" ]]; then
-                echo "🔔 New review detected via fswatch!"
-                
-                # レビューカウントリセットチェック
-                reset_review_count_if_needed "$filepath"
-                
-                set +e  # Temporarily disable exit on error
-                send_review_to_tmux "$session" "$content"
-                local send_result=$?
-                set -e  # Re-enable exit on error
-                
-                if [[ $send_result -eq 1 ]]; then
-                    echo "⚠️  Review limit reached. Continuing to monitor for new files..."
-                    # Continue monitoring instead of exiting
-                elif [[ $send_result -eq 2 ]]; then
-                    echo "👋 Exiting watch mode by user request."
-                    exit 0
-                fi
-            else
-                log "Warning: File exists but content is empty"
-            fi
-        fi
+        process_review_file "$filepath" "$session"
     done
 }
 
@@ -426,31 +432,7 @@ watch_with_polling() {
             if [[ "$current_mtime" != "$last_mtime" ]]; then
                 log "Detected file change: $watch_file (mtime: $current_mtime)"
                 last_mtime="$current_mtime"
-                
-                local content
-                content=$(cat "$watch_file")
-                if [[ -n "$content" ]]; then
-                    echo "🔔 New review detected via polling!"
-                    log "Sending review content (${#content} chars) to session: $session"
-                    
-                    # レビューカウントリセットチェック
-                    reset_review_count_if_needed "$watch_file"
-                    
-                    set +e  # Temporarily disable exit on error
-                    send_review_to_tmux "$session" "$content"
-                    local send_result=$?
-                    set -e  # Re-enable exit on error
-                    
-                    if [[ $send_result -eq 1 ]]; then
-                        echo "⚠️  Review limit reached. Continuing to monitor for new files..."
-                        # Continue monitoring instead of exiting
-                    elif [[ $send_result -eq 2 ]]; then
-                        echo "👋 Exiting watch mode by user request."
-                        exit 0
-                    fi
-                else
-                    log "Warning: File exists but content is empty"
-                fi
+                process_review_file "$watch_file" "$session"
             fi
         fi
         sleep 2
@@ -460,18 +442,30 @@ watch_with_polling() {
 # シグナルハンドラー
 cleanup() {
     log "Shutting down cc-gc-review..."
+    if [[ -n "$TMP_DIR" && -d "$TMP_DIR" ]]; then
+        log "Removing temporary directory: $TMP_DIR"
+        rm -rf "$TMP_DIR"
+    fi
     exit 0
 }
 
-trap cleanup INT TERM
+trap cleanup INT TERM EXIT
 
 # メイン処理
 main() {
     parse_args "$@"
     
+    # 安全な一時ディレクトリを作成
+    TMP_DIR=$(mktemp -d "$TMP_DIR_BASE/cc-gc-review.XXXXXX")
+    log "Created temporary directory: $TMP_DIR"
+    
+    WATCH_FILE="$TMP_DIR/gemini-review"
+    # hook-handler.sh にもこのパスを渡すため環境変数で共有
+    export CC_GC_REVIEW_WATCH_FILE="$WATCH_FILE"
+    
     echo "=== cc-gc-review starting ==="
     echo "Session name: $SESSION_NAME"
-    echo "Review file: $TMP_DIR/gemini-review"
+    echo "Review file: $WATCH_FILE"
     echo "Think mode: $THINK_MODE"
     echo "Auto-launch Claude: $AUTO_CLAUDE_LAUNCH"
     echo "Resend existing: $RESEND_EXISTING"
@@ -492,7 +486,7 @@ main() {
     
     echo ""
     echo "✓ tmux session '$SESSION_NAME' is ready"
-    echo "✓ Watching for review file: $TMP_DIR/gemini-review"
+    echo "✓ Watching for review file: $WATCH_FILE"
     echo ""
     echo "To attach to the session, run:"
     echo "  tmux attach-session -t $SESSION_NAME"

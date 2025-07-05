@@ -3,13 +3,18 @@
 # test_cc_gc_review.bats - cc-gc-review.sh のテスト (TDD approach)
 
 setup() {
+    # Clean up any leftover test directories first
+    rm -rf ./test-tmp-* 2>/dev/null || true
+    
     # テスト用の設定
     export TEST_SESSION="test-claude-$$"
-    export TEST_TMP_DIR="./test-tmp-$$"
+    # Use mktemp for safer temporary directory creation
+    export TEST_TMP_DIR
+    TEST_TMP_DIR=$(mktemp -d)
     export SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     
-    # テスト用ディレクトリの作成
-    mkdir -p "$TEST_TMP_DIR"
+    # Set up cleanup trap
+    trap 'cleanup_test_env' EXIT INT TERM
     
     # モックのgit設定
     export GIT_AUTHOR_NAME="Test User"
@@ -18,16 +23,24 @@ setup() {
     export GIT_COMMITTER_EMAIL="test@example.com"
 }
 
-teardown() {
+cleanup_test_env() {
     # テスト用tmuxセッションの終了
     tmux kill-session -t "$TEST_SESSION" 2>/dev/null || true
     
-    # テスト用一時ディレクトリの削除
-    rm -rf "$TEST_TMP_DIR"
+    # Clean up test directories
+    if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
+        rm -rf "$TEST_TMP_DIR"
+    fi
     
     # テスト用レビューファイルの削除
-    rm -f /tmp/gemini-review-* 2>/dev/null || true
-    rm -f /tmp/gemini-review 2>/dev/null || true
+    rm -f /tmp/gemini-* 2>/dev/null || true
+    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
+}
+
+teardown() {
+    # Cleanup is now handled by the trap in setup()
+    # Additional cleanup if needed can be added here
+    cleanup_test_env
 }
 
 @test "help option should display usage information" {

@@ -6,15 +6,20 @@ load "test_helper/bats-support/load.bash"
 load "test_helper/bats-assert/load.bash"
 
 setup() {
+    # Clean up any leftover test directories first
+    rm -rf ./test-tmp-* 2>/dev/null || true
+    
     # Test configuration
     export TEST_SESSION="test-count-$$"
-    export TEST_TMP_DIR="./test-tmp-$$"
+    # Use mktemp for safer temporary directory creation
+    export TEST_TMP_DIR
+    TEST_TMP_DIR=$(mktemp -d)
     export SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
     export TEST_REVIEW_FILE="$TEST_TMP_DIR/gemini-review"
     export TEST_COUNT_FILE="$TEST_TMP_DIR/cc-gc-review-count"
     
-    # Create test directory
-    mkdir -p "$TEST_TMP_DIR"
+    # Set up cleanup trap
+    trap 'cleanup_test_env' EXIT INT TERM
     
     # Mock git settings
     export GIT_AUTHOR_NAME="Test User"
@@ -23,16 +28,24 @@ setup() {
     export GIT_COMMITTER_EMAIL="test@example.com"
 }
 
-teardown() {
+cleanup_test_env() {
     # Clean up tmux session
     tmux kill-session -t "$TEST_SESSION" 2>/dev/null || true
     
     # Clean up test directories
-    rm -rf "$TEST_TMP_DIR"
+    if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
+        rm -rf "$TEST_TMP_DIR"
+    fi
     
-    # Clean up any test files
-    rm -f /tmp/gemini-review-* 2>/dev/null || true
-    rm -f /tmp/cc-gc-review-count-* 2>/dev/null || true
+    # Clean up any remaining test files
+    rm -f /tmp/gemini-* 2>/dev/null || true
+    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
+}
+
+teardown() {
+    # Cleanup is now handled by the trap in setup()
+    # Additional cleanup if needed can be added here
+    cleanup_test_env
 }
 
 @test "review count should increment correctly" {
@@ -89,7 +102,7 @@ teardown() {
     [ "$output" = "4" ]
 }
 
-@test "review count should stop at limit" {
+@test "review count should pass at limit and reset" {
     # Create tmux session
     tmux new-session -d -s "$TEST_SESSION"
     
@@ -102,6 +115,7 @@ teardown() {
     REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
     THINK_MODE=false
     CUSTOM_COMMAND=""
+    CC_GC_REVIEW_TEST_MODE=true
     
     # Test first review
     run send_review_to_tmux "$TEST_SESSION" "First review content"
@@ -112,15 +126,25 @@ teardown() {
     run send_review_to_tmux "$TEST_SESSION" "Second review content"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "📊 Review count: 2/2" ]]
+    [[ "$output" =~ "⚠️  Review limit will be reached" ]]
     
-    # Test third review should fail (limit reached)
+    # Test third review should be passed (limit reached) and count reset
     run send_review_to_tmux "$TEST_SESSION" "Third review content"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "🚫 Review limit reached (2/2)" ]]
-    [[ "$output" =~ "Stopping review loop" ]]
+    [[ "$output" =~ "Passing this review and resetting count" ]]
+    [[ "$output" =~ "🔄 Review count reset" ]]
+    
+    # Count file should be deleted (reset)
+    assert_file_not_exists "$TEST_COUNT_FILE"
+    
+    # Test fourth review should work normally (after reset)
+    run send_review_to_tmux "$TEST_SESSION" "Fourth review content"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "📊 Review count: 1/2" ]]
 }
 
-@test "review count should reset on new file update" {
+@test "review count should not reset on new file update" {
     # Create tmux session
     tmux new-session -d -s "$TEST_SESSION"
     
@@ -135,16 +159,24 @@ teardown() {
     CUSTOM_COMMAND=""
     CC_GC_REVIEW_TEST_MODE=true
     
-    # Set up initial count
+    # Set up initial count to simulate previous reviews
     echo "2" > "$TEST_COUNT_FILE"
     
-    # Test review count reset logic
-    # This should only happen when a new file update occurs, not on every review
+    # Test that review count continues from existing value (no auto-reset on file update)
     run send_review_to_tmux "$TEST_SESSION" "Review after file update"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "📊 Review count: 3/4" ]]
     
-    # Check count file has incremented from existing value
+    # Check count file has incremented from existing value (not reset)
+    run cat "$TEST_COUNT_FILE"
+    [ "$output" = "3" ]
+    
+    # Test reset_review_count_if_needed function doesn't reset
+    run reset_review_count_if_needed "test-file-path"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "auto-reset disabled in new specification" ]]
+    
+    # Count should remain unchanged
     run cat "$TEST_COUNT_FILE"
     [ "$output" = "3" ]
 }
@@ -242,14 +274,86 @@ teardown() {
     REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
     THINK_MODE=false
     CUSTOM_COMMAND=""
+    CC_GC_REVIEW_TEST_MODE=true
     
     # Test first review
     run send_review_to_tmux "$TEST_SESSION" "First review content"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "📊 Review count: 1/1" ]]
+    [[ "$output" =~ "⚠️  Review limit will be reached" ]]
     
-    # Test second review should fail immediately
+    # Count should be at limit
+    run cat "$TEST_COUNT_FILE"
+    [ "$output" = "1" ]
+    
+    # Test second review should be passed (limit reached) and reset count
     run send_review_to_tmux "$TEST_SESSION" "Second review content"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "🚫 Review limit reached (1/1)" ]]
+    [[ "$output" =~ "Passing this review and resetting count" ]]
+    
+    # Count file should be deleted after reset
+    assert_file_not_exists "$TEST_COUNT_FILE"
+    
+    # Test third review should work normally after reset
+    run send_review_to_tmux "$TEST_SESSION" "Third review content"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "📊 Review count: 1/1" ]]
+}
+
+@test "count file should handle invalid values gracefully" {
+    # Create tmux session
+    tmux new-session -d -s "$TEST_SESSION"
+    
+    # Source the script to get the function
+    source "$SCRIPT_DIR/cc-gc-review.sh"
+    
+    # Override the necessary variables for testing
+    MAX_REVIEWS=4
+    INFINITE_REVIEW=false
+    REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
+    THINK_MODE=false
+    CUSTOM_COMMAND=""
+    CC_GC_REVIEW_TEST_MODE=true
+    
+    # Test with extremely large value
+    echo "99999" > "$TEST_COUNT_FILE"
+    
+    run send_review_to_tmux "$TEST_SESSION" "Review with large count"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: Invalid count value '99999', resetting to 0" ]]
+    [[ "$output" =~ "📊 Review count: 1/4" ]]
+    
+    # Test with negative value  
+    echo "-5" > "$TEST_COUNT_FILE"
+    
+    run send_review_to_tmux "$TEST_SESSION" "Review with negative count"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: Invalid count value '-5', resetting to 0" ]]
+    [[ "$output" =~ "📊 Review count: 1/4" ]]
+}
+
+@test "zero max reviews should disable counting" {
+    # Create tmux session
+    tmux new-session -d -s "$TEST_SESSION"
+    
+    # Source the script to get the function
+    source "$SCRIPT_DIR/cc-gc-review.sh"
+    
+    # Override the necessary variables for testing
+    MAX_REVIEWS=0
+    INFINITE_REVIEW=false
+    REVIEW_COUNT_FILE="$TEST_COUNT_FILE"
+    THINK_MODE=false
+    CUSTOM_COMMAND=""
+    CC_GC_REVIEW_TEST_MODE=true
+    
+    # All reviews should be passed immediately when MAX_REVIEWS=0
+    run send_review_to_tmux "$TEST_SESSION" "First review with zero limit"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "🚫 Review limit reached (0/0)" ]]
+    [[ "$output" =~ "Passing this review and resetting count" ]]
+    
+    # Count file should not exist
+    assert_file_not_exists "$TEST_COUNT_FILE"
 }

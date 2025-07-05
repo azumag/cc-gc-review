@@ -3,12 +3,16 @@
 # test_hook_handler.bats - hook-handler.sh のテスト (TDD approach)
 
 setup() {
+    # Clean up any leftover test directories first
+    rm -rf ./test-tmp-* 2>/dev/null || true
+    
     # テスト用の設定
-    export TEST_TMP_DIR="./test-tmp-$$"
+    export TEST_TMP_DIR
+    TEST_TMP_DIR=$(mktemp -d)
     export SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
     
-    # テスト用ディレクトリの作成
-    mkdir -p "$TEST_TMP_DIR"
+    # Set up cleanup trap
+    trap 'cleanup_test_env' EXIT INT TERM
     
     # 環境変数の設定
     export CC_GC_REVIEW_VERBOSE="true"
@@ -22,17 +26,24 @@ setup() {
 EOF
 }
 
+cleanup_test_env() {
+    # Clean up test directories
+    if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
+        rm -rf "$TEST_TMP_DIR"
+    fi
+    
+    # Clean up any remaining test files
+    rm -f /tmp/gemini-* 2>/dev/null || true
+    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
+    
+    # Clean up environment variables
+    unset CC_GC_REVIEW_VERBOSE CC_GC_REVIEW_TMP_DIR CC_GC_REVIEW_WATCH_FILE
+}
+
 teardown() {
-    # テスト用ディレクトリの削除
-    rm -rf "$TEST_TMP_DIR"
-    
-    # テスト用ファイルの削除
-    rm -f /tmp/gemini-review* 2>/dev/null || true
-    rm -f /tmp/gemini-prompt* 2>/dev/null || true
-    rm -f /tmp/cc-gc-review-hook.log* 2>/dev/null || true
-    
-    # 環境変数のクリーンアップ
-    unset CC_GC_REVIEW_VERBOSE CC_GC_REVIEW_TMP_DIR
+    # Cleanup is now handled by the trap in setup()
+    # Additional cleanup if needed can be added here
+    cleanup_test_env
 }
 
 @test "should extract work summary from transcript file" {
@@ -107,6 +118,10 @@ EOF
     local empty_transcript="$TEST_TMP_DIR/empty-transcript.jsonl"
     touch "$empty_transcript"
     
+    # テスト用のレビューファイルパスを設定
+    local test_review_file="$TEST_TMP_DIR/test-gemini-review"
+    export CC_GC_REVIEW_WATCH_FILE="$test_review_file"
+    
     local test_json='{
         "session_id": "test123",
         "transcript_path": "'$empty_transcript'",
@@ -117,7 +132,7 @@ EOF
     
     [ "$status" -eq 0 ]
     # 空のサマリーの場合、レビューファイルが作成されないことを確認
-    [ ! -f "/tmp/gemini-review" ]
+    [ ! -f "$test_review_file" ]
 }
 
 @test "should expand tilde in transcript path" {
@@ -327,11 +342,15 @@ EOF
     run bash -c "echo '$test_json' | '$SCRIPT_DIR/hook-handler.sh' --git-diff"
     
     [ "$status" -eq 0 ]
-    # プロンプトファイルが作成されることを確認
-    [ -f "/tmp/gemini-prompt" ]
+    # プロンプトファイルが作成されることを確認（パターンマッチング）
+    local prompt_files
+    prompt_files=$(ls /tmp/gemini-prompt.* 2>/dev/null | wc -l)
+    [ "$prompt_files" -gt 0 ]
     
     # プロンプトに git diff の指示が含まれていることを確認
-    run cat "/tmp/gemini-prompt"
+    local prompt_file
+    prompt_file=$(ls /tmp/gemini-prompt.* 2>/dev/null | head -1)
+    run cat "$prompt_file"
     [[ "$output" =~ "git diffを実行して" ]]
 }
 
@@ -356,11 +375,15 @@ EOF
     run bash -c "echo '$test_json' | '$SCRIPT_DIR/hook-handler.sh' --git-commit"
     
     [ "$status" -eq 0 ]
-    # プロンプトファイルが作成されることを確認
-    [ -f "/tmp/gemini-prompt" ]
+    # プロンプトファイルが作成されることを確認（パターンマッチング）
+    local prompt_files
+    prompt_files=$(ls /tmp/gemini-prompt.* 2>/dev/null | wc -l)
+    [ "$prompt_files" -gt 0 ]
     
     # プロンプトに git commit の指示が含まれていることを確認
-    run cat "/tmp/gemini-prompt"
+    local prompt_file
+    prompt_file=$(ls /tmp/gemini-prompt.* 2>/dev/null | head -1)
+    run cat "$prompt_file"
     [[ "$output" =~ "git commitを確認し" ]]
 }
 
@@ -385,9 +408,14 @@ EOF
     run bash -c "echo '$test_json' | '$SCRIPT_DIR/hook-handler.sh' --yolo"
     
     [ "$status" -eq 0 ]
-    # ログファイルにYOLOモードの記録があることを確認
-    [ -f "/tmp/cc-gc-review-hook.log" ]
-    run cat "/tmp/cc-gc-review-hook.log"
+    # ログファイルにYOLOモードの記録があることを確認（パターンマッチング）
+    local log_files
+    log_files=$(ls /tmp/cc-gc-review-hook.log.* 2>/dev/null | wc -l)
+    [ "$log_files" -gt 0 ]
+    
+    local log_file
+    log_file=$(ls /tmp/cc-gc-review-hook.log.* 2>/dev/null | head -1)
+    run cat "$log_file"
     [[ "$output" =~ "YOLO_MODE: true" ]]
 }
 
@@ -412,11 +440,15 @@ EOF
     run bash -c "echo '$test_json' | '$SCRIPT_DIR/hook-handler.sh'"
     
     [ "$status" -eq 0 ]
-    # ログファイルが作成されることを確認
-    [ -f "/tmp/cc-gc-review-hook.log" ]
+    # ログファイルが作成されることを確認（パターンマッチング）
+    local log_files
+    log_files=$(ls /tmp/cc-gc-review-hook.log.* 2>/dev/null | wc -l)
+    [ "$log_files" -gt 0 ]
     
     # ログファイルの内容を確認
-    run cat "/tmp/cc-gc-review-hook.log"
+    local log_file
+    log_file=$(ls /tmp/cc-gc-review-hook.log.* 2>/dev/null | head -1)
+    run cat "$log_file"
     [[ "$output" =~ "Hook handler started" ]]
     [[ "$output" =~ "Hook handler completed" ]]
 }
@@ -442,11 +474,15 @@ EOF
     run bash -c "echo '$test_json' | '$SCRIPT_DIR/hook-handler.sh'"
     
     [ "$status" -eq 0 ]
-    # プロンプトファイルが作成されることを確認
-    [ -f "/tmp/gemini-prompt" ]
+    # プロンプトファイルが作成されることを確認（パターンマッチング）
+    local prompt_files
+    prompt_files=$(ls /tmp/gemini-prompt.* 2>/dev/null | wc -l)
+    [ "$prompt_files" -gt 0 ]
     
     # プロンプトファイルの内容を確認
-    run cat "/tmp/gemini-prompt"
+    local prompt_file
+    prompt_file=$(ls /tmp/gemini-prompt.* 2>/dev/null | head -1)
+    run cat "$prompt_file"
     [[ "$output" =~ "作業内容をレビュー" ]]
     [[ "$output" =~ "作業内容:" ]]
 }
