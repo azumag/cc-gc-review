@@ -17,6 +17,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Install system dependencies
       run: |
@@ -71,6 +73,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Install ShellCheck
       run: |
@@ -98,6 +102,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Run bandit security scan
       run: |
@@ -130,6 +136,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Install dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
