@@ -6,7 +6,6 @@
 set -uo pipefail
 
 # 設定
-TMP_DIR="/tmp"
 VERBOSE="${CC_GC_REVIEW_VERBOSE:-false}"
 GIT_DIFF_MODE=false
 GIT_COMMIT_MODE=false
@@ -17,7 +16,7 @@ WATCH_FILE="${CC_GC_REVIEW_WATCH_FILE:-/tmp/gemini-review}"
 
 # ログ関数
 log() {
-    local message="[$(date +'%Y-%m-%d %H:%M:%S')] [hook-handler] $*"
+    local message; message="[$(date +'%Y-%m-%d %H:%M:%S')] [hook-handler] $*"
     echo "$message" >> "$LOG_FILE"
     if [[ "$VERBOSE" == "true" ]]; then
         echo "$message" >&2
@@ -26,7 +25,7 @@ log() {
 
 # ユーザー向けメッセージログ（必ず出力）
 user_log() {
-    local message="[$(date +'%Y-%m-%d %H:%M:%S')] [hook-handler] $*"
+    local message; message="[$(date +'%Y-%m-%d %H:%M:%S')] [hook-handler] $*"
     echo "$message" >> "$LOG_FILE"
     echo "$message" >&2
 }
@@ -169,8 +168,8 @@ $summary
         local content_count=0
         while [[ $content_count -lt $content_wait ]]; do
             if [[ -s "$temp_stdout" ]] || [[ -s "$temp_stderr" ]]; then
-                local current_content=$(cat "$temp_stdout" 2>/dev/null)
-                local filtered_content=$(echo "$current_content" | grep -v "^\[dotenv@.*\] injecting env" | sed '/^$/d')
+                local current_content; current_content=$(cat "$temp_stdout" 2>/dev/null)
+                local filtered_content; filtered_content=$(echo "$current_content" | grep -v "^\[dotenv@.*\] injecting env" | sed '/^$/d')
                 
                 if [[ -n "$filtered_content" ]] || [[ $gemini_exit_code -ne 0 ]]; then
                     log "Content available after ${content_count} seconds"
@@ -206,7 +205,7 @@ $summary
                [[ "$error_output" =~ "Quota exceeded" ]] || \
                [[ "$error_output" =~ "RESOURCE_EXHAUSTED" ]] || \
                [[ "$error_output" =~ "Too Many Requests" ]] || \
-               [[ "$error_output" =~ "Gemini 2.5 Pro Requests" ]] || \
+               [[ "$error_output" =~ Gemini\ 2\.5\ Pro\ Requests ]] || \
                [[ "$review_result" =~ "status 429" ]]; then
                 is_rate_limit=true
                 log "Rate limit detected in error output (exit code: $gemini_exit_code)"
@@ -214,7 +213,7 @@ $summary
                 log "Warning: No actual review content found after filtering dotenv logs"
                 
                 # 生の出力をログに記録（デバッグ用）
-                local raw_output=$(cat "$temp_stdout" 2>/dev/null)
+                local raw_output; raw_output=$(cat "$temp_stdout" 2>/dev/null)
                 log "Raw stdout content: $raw_output"
                 log "Raw stderr content: $error_output"
                 
@@ -229,8 +228,6 @@ $summary
             
             # Flashモデルで再実行
             gemini_options="$gemini_options --model=gemini-2.5-flash"
-            local flash_start_time
-            flash_start_time=$(date +%s)
             
             # Flashモデルもタイムアウト付きで実行
             if command -v timeout >/dev/null 2>&1; then
@@ -280,8 +277,8 @@ $summary
             local flash_content_count=0
             while [[ $flash_content_count -lt $flash_content_wait ]]; do
                 if [[ -s "$temp_stdout" ]] || [[ -s "$temp_stderr" ]]; then
-                    local current_content=$(cat "$temp_stdout" 2>/dev/null)
-                    local filtered_content=$(echo "$current_content" | grep -v "^\[dotenv@.*\] injecting env" | sed '/^$/d')
+                    local current_content; current_content=$(cat "$temp_stdout" 2>/dev/null)
+                    local filtered_content; filtered_content=$(echo "$current_content" | grep -v "^\[dotenv@.*\] injecting env" | sed '/^$/d')
                     
                     if [[ -n "$filtered_content" ]] || [[ $gemini_exit_code -ne 0 ]]; then
                         log "Flash model content available after ${flash_content_count} seconds"
@@ -305,12 +302,12 @@ $summary
             elif [[ $gemini_exit_code -eq 0 ]]; then
                 if [[ -z "$review_result" ]]; then
                     log "Warning: Flash model succeeded but no review content found after filtering"
-                    local raw_flash_output=$(cat "$temp_stdout" 2>/dev/null)
+                    local raw_flash_output; raw_flash_output=$(cat "$temp_stdout" 2>/dev/null)
                     log "Raw flash stdout content: $raw_flash_output"
                     log "Skipping review due to empty Flash content"
                     return 1  # レビューファイルを作成しない
                 else
-                    local flash_end_time=$(date +%s)
+                    local flash_end_time; flash_end_time=$(date +%s)
                     local flash_execution_time=$((flash_end_time - start_time))
                     log "Successfully switched to Flash model with content length: ${#review_result} (took ${flash_execution_time}s total)"
                     user_log "✅ Flash model execution successful"
@@ -327,7 +324,7 @@ $summary
             log "Skipping review due to Pro model failure"
             return 1  # レビューファイルを作成しない
         else
-            local end_time=$(date +%s)
+            local end_time; end_time=$(date +%s)
             local execution_time=$((end_time - start_time))
             log "Pro model execution successful with content length: ${#review_result} (took ${execution_time}s)"
         fi
