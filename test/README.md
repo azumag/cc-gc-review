@@ -1,12 +1,12 @@
 # Shell Script Testing with Bats
 
-このディレクトリには、cc-gen-reviewプロジェクトのシェルスクリプトに対するテストスイートが含まれています。
+このディレクトリには、cc-gc-reviewプロジェクトのシェルスクリプトに対するテストスイートが含まれています。
 
 ## 概要
 
 - **テストフレームワーク**: [Bats (Bash Automated Testing System)](https://github.com/bats-core/bats-core)
 - **テストアプローチ**: TDD (Test-Driven Development) に基づいたテスト設計
-- **対象スクリプト**: `cc-gen-review.sh`, `hook-handler.sh`
+- **対象スクリプト**: `cc-gc-review.sh`, `hook-handler.sh`
 
 ## セットアップ
 
@@ -41,9 +41,9 @@ sudo apt-get install bats tmux jq coreutils
 
 ## テストファイル
 
-### `test_cc_gen_review.bats`
+### `test_cc_gc_review.bats`
 
-`cc-gen-review.sh` の包括的なテストスイート：
+`cc-gc-review.sh` の包括的なテストスイート：
 
 - コマンドライン引数の処理
 - ヘルプ表示機能
@@ -79,8 +79,8 @@ sudo apt-get install bats tmux jq coreutils
 ### 特定のテストファイル実行
 
 ```bash
-# cc-gen-reviewのテストのみ
-./run_tests.sh --file test_cc_gen_review.bats
+# cc-gc-reviewのテストのみ
+./run_tests.sh --file test_cc_gc_review.bats
 
 # hook-handlerのテストのみ
 ./run_tests.sh --file test_hook_handler.bats
@@ -98,7 +98,7 @@ sudo apt-get install bats tmux jq coreutils
 
 ```bash
 # 個別ファイル実行
-bats test_cc_gen_review.bats
+bats test_cc_gc_review.bats
 bats test_hook_handler.bats
 
 # 全テスト実行
@@ -188,7 +188,7 @@ teardown() {
 ```bash
 # Good: 各テストは独立している
 @test "should create new tmux session" {
-    run "$SCRIPT_DIR/cc-gen-review.sh" "$TEST_SESSION"
+    run "$SCRIPT_DIR/cc-gc-review.sh" "$TEST_SESSION"
     [ "$status" -eq 0 ]
 }
 

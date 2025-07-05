@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# test.sh - cc-gen-reviewのテストスクリプト
+# test.sh - cc-gc-reviewのテストスクリプト
 
 set -euo pipefail
 
@@ -56,7 +56,7 @@ setup() {
 test_help() {
     test_start "Help display"
     
-    if $SCRIPT_DIR/cc-gen-review.sh -h | grep -q "Usage:"; then
+    if $SCRIPT_DIR/cc-gc-review.sh -h | grep -q "Usage:"; then
         test_pass
     else
         test_fail "Help text not displayed"
@@ -67,7 +67,7 @@ test_help() {
 test_no_args() {
     test_start "Error on no arguments"
     
-    if $SCRIPT_DIR/cc-gen-review.sh 2>&1 | grep -q "SESSION_NAME is required"; then
+    if $SCRIPT_DIR/cc-gc-review.sh 2>&1 | grep -q "SESSION_NAME is required"; then
         test_pass
     else
         test_fail "No error message for missing session name"
@@ -79,7 +79,7 @@ test_tmux_session_creation() {
     test_start "Tmux session creation"
     
     # バックグラウンドでcc-gen-reviewを起動
-    timeout 3s $SCRIPT_DIR/cc-gen-review.sh -v --tmp-dir "$TEST_TMP_DIR" "$TEST_SESSION" &
+    timeout 3s $SCRIPT_DIR/cc-gc-review.sh -v --tmp-dir "$TEST_TMP_DIR" "$TEST_SESSION" &
     PID=$!
     sleep 1
     
@@ -109,8 +109,8 @@ EOF
     }'
     
     # hook-handlerを実行
-    export CC_GEN_REVIEW_TMP_DIR="$TEST_TMP_DIR"
-    export CC_GEN_REVIEW_VERBOSE="true"
+    export CC_GC_REVIEW_TMP_DIR="$TEST_TMP_DIR"
+    export CC_GC_REVIEW_VERBOSE="true"
     
     if echo "$test_json" | $SCRIPT_DIR/hook-handler.sh 2>&1 | grep -q "Hook handler completed successfully"; then
         # レビューファイルが作成されたか確認
@@ -132,7 +132,7 @@ test_file_watch() {
     tmux new-session -d -s "$TEST_SESSION"
     
     # cc-gen-reviewをバックグラウンドで起動
-    $SCRIPT_DIR/cc-gen-review.sh -v --tmp-dir "$TEST_TMP_DIR" "$TEST_SESSION" &
+    $SCRIPT_DIR/cc-gc-review.sh -v --tmp-dir "$TEST_TMP_DIR" "$TEST_SESSION" &
     PID=$!
     sleep 2
     
@@ -160,7 +160,7 @@ test_stop_hook_active() {
         "stop_hook_active": true
     }'
     
-    export CC_GEN_REVIEW_VERBOSE="true"
+    export CC_GC_REVIEW_VERBOSE="true"
     
     if echo "$test_json" | $SCRIPT_DIR/hook-handler.sh 2>&1 | grep -q "Stop hook is already active"; then
         test_pass
@@ -176,7 +176,7 @@ test_tmp_dir_fallback() {
     # ./tmpが存在しない状態でテスト
     rm -rf ./tmp
     
-    timeout 3s $SCRIPT_DIR/cc-gen-review.sh -v "$TEST_SESSION" 2>&1 | grep -q "Using /tmp as temporary directory" &
+    timeout 3s $SCRIPT_DIR/cc-gc-review.sh -v "$TEST_SESSION" 2>&1 | grep -q "Using /tmp as temporary directory" &
     PID=$!
     sleep 1
     
@@ -189,7 +189,7 @@ test_tmp_dir_fallback() {
 
 # メイン処理
 main() {
-    echo "=== cc-gen-review Test Suite ==="
+    echo "=== cc-gc-review Test Suite ==="
     echo
     
     # セットアップ

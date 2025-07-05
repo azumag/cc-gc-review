@@ -1,4 +1,4 @@
-# cc-gen-review
+# cc-gc-review
 
 Claude CodeとGeminiをstop hook連携させるサポートツール
 
@@ -25,8 +25,8 @@ Claude CodeとGeminiをstop hook連携させるサポートツール
 ## インストール
 
 ```bash
-git clone https://github.com/yourusername/cc-gen-review.git
-cd cc-gen-review
+git clone https://github.com/yourusername/cc-gc-review.git
+cd cc-gc-review
 chmod +x *.sh
 ```
 
@@ -36,35 +36,34 @@ chmod +x *.sh
 
 ```bash
 # 基本的な使い方
-# tmux pane として 'claude' を指定
-./cc-gen-review.sh claude 
+./cc-gc-review.sh claude
 
 # 自動でClaudeも起動
-./cc-gen-review.sh -c claude
+./cc-gc-review.sh -c claude
 
 # thinkモードを有効化
-./cc-gen-review.sh --think claude
+./cc-gc-review.sh --think claude
 
 # 詳細ログを表示
-./cc-gen-review.sh -v claude
+./cc-gc-review.sh -v claude
 
 # オプション組み合わせ
-./cc-gen-review.sh --think -c -v claude
+./cc-gc-review.sh --think -c -v claude
 
 # 既存ファイル再送信付き
-./cc-gen-review.sh --resend --think --custom-command "optimize" claude
+./cc-gc-review.sh --resend --think --custom-command "optimize" claude
 
 # カスタムコマンド付き
-./cc-gen-review.sh --custom-command "refactor" claude
+./cc-gc-review.sh --custom-command "refactor" claude
 
 # 起動時に既存のレビューファイルを再送信
-./cc-gen-review.sh --resend claude
+./cc-gc-review.sh --resend claude
 
 # レビュー数を制限
-./cc-gen-review.sh --max-reviews 10 claude
+./cc-gc-review.sh --max-reviews 10 claude
 
 # 無制限にレビュー
-./cc-gen-review.sh --infinite-review claude
+./cc-gc-review.sh --infinite-review claude
 ```
 
 起動後、別のターミナルで以下を実行してセッションにアタッチ：
@@ -80,7 +79,7 @@ tmux attach-session -t claude
 ```json
 {
   "hooks": {
-    "stop": "/path/to/cc-gen-review/hook-handler.sh"
+    "stop": "/path/to/cc-gc-review/hook-handler.sh"
   }
 }
 ```
@@ -89,7 +88,7 @@ git diff を確認する設定：
 ```json
 {
   "hooks": {
-    "stop": "/path/to/cc-gen-review/hook-handler.sh --git-diff --yolo"
+    "stop": "/path/to/cc-gc-review/hook-handler.sh --git-diff --yolo"
   }
 }
 ```
@@ -98,11 +97,10 @@ git commitを確認する設定：
 ```json
 {
   "hooks": {
-    "stop": "/path/to/cc-gen-review/hook-handler.sh --git-commit --yolo"
+    "stop": "/path/to/cc-gc-review/hook-handler.sh --git-commit --yolo"
   }
 }
 ```
-
 #### hook-handler.shのオプション
 
 | オプション | 説明 |
@@ -119,10 +117,10 @@ git commitを確認する設定：
 詳細ログを有効にする場合：
 
 ```bash
-export CC_GEN_REVIEW_VERBOSE="true"
+export CC_GC_REVIEW_VERBOSE="true"
 ```
 
-## cc-gen-review のオプション
+## cc-gc-review のオプション
 
 | オプション | 説明 |
 |-----------|------|
@@ -140,7 +138,7 @@ export CC_GEN_REVIEW_VERBOSE="true"
 1. **hook-handler.sh**がClaude Codeのstop hookから呼び出される
 2. トランスクリプトファイルから最新の作業内容を抽出
 3. Geminiでレビューを実行し、結果を`/tmp/gemini-review`に保存
-4. **cc-gen-review.sh**が`/tmp/gemini-review`ファイルを監視
+4. **cc-gc-review.sh**が`/tmp/gemini-review`ファイルを監視
 5. ファイルの更新を検出したら、tmuxセッションに内容を送信
 6. Claudeが自動的にレビュー内容を受け取る
 
@@ -176,7 +174,7 @@ tmux list-sessions  # 既存のセッションを確認
 ### レビューが送信されない
 
 - 一時ディレクトリの権限を確認
-- verboseモードで詳細ログを確認: `./cc-gen-review.sh -v claude`
+- verboseモードで詳細ログを確認: `./cc-gc-review.sh -v claude`
 - gemini-cliがインストールされているか確認
 
 ### 無限ループの防止
@@ -186,7 +184,7 @@ tmux list-sessions  # 既存のセッションを確認
 1. **hook-handler.sh**は`stop_hook_active`フラグをチェックして、既にstop hookが実行中の場合は処理をスキップします。
 2. **レビュー数制限**: デフォルトで4回までレビューを実行し、それ以上は自動停止します。
 3. **インタラクティブ確認**: 各レビュー後に「続行します」と表示され、10秒以内に「n」を入力すると停止します。
-4. **カウントファイル**: `/tmp/cc-gen-review-count`でレビュー数を追跡し、新しいファイル更新時にリセットされます。
+4. **カウントファイル**: `/tmp/cc-gc-review-count`でレビュー数を追跡し、新しいファイル更新時にリセットされます。
 
 #### 無限ループ防止のオプション
 

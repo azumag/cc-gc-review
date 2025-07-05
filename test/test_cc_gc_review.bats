@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# test_cc_gen_review.bats - cc-gen-review.sh のテスト (TDD approach)
+# test_cc_gc_review.bats - cc-gc-review.sh のテスト (TDD approach)
 
 setup() {
     # テスト用の設定
@@ -31,7 +31,7 @@ teardown() {
 }
 
 @test "help option should display usage information" {
-    run "$SCRIPT_DIR/cc-gen-review.sh" -h
+    run "$SCRIPT_DIR/cc-gc-review.sh" -h
     
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Usage:" ]]
@@ -39,14 +39,14 @@ teardown() {
 }
 
 @test "script should fail when no session name is provided" {
-    run "$SCRIPT_DIR/cc-gen-review.sh"
+    run "$SCRIPT_DIR/cc-gc-review.sh"
     
     [ "$status" -eq 1 ]
     [[ "$output" =~ "SESSION_NAME is required" ]]
 }
 
 @test "script should fail with unknown option" {
-    run "$SCRIPT_DIR/cc-gen-review.sh" --unknown-option test
+    run "$SCRIPT_DIR/cc-gc-review.sh" --unknown-option test
     
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Unknown option: --unknown-option" ]]
@@ -54,7 +54,7 @@ teardown() {
 
 @test "verbose option should enable detailed logging" {
     # バックグラウンドでプロセスを起動し、すぐに終了
-    timeout 2s "$SCRIPT_DIR/cc-gen-review.sh" -v "$TEST_SESSION" &
+    timeout 2s "$SCRIPT_DIR/cc-gc-review.sh" -v "$TEST_SESSION" &
     local pid=$!
     sleep 1
     kill $pid 2>/dev/null || true
@@ -70,7 +70,7 @@ teardown() {
     tmux new-session -d -s "$TEST_SESSION"
     
     # cc-gen-reviewをバックグラウンドで起動
-    timeout 5s "$SCRIPT_DIR/cc-gen-review.sh" --think "$TEST_SESSION" &
+    timeout 5s "$SCRIPT_DIR/cc-gc-review.sh" --think "$TEST_SESSION" &
     local pid=$!
     sleep 2
     
@@ -90,7 +90,7 @@ teardown() {
     tmux new-session -d -s "$TEST_SESSION"
     
     # cc-gen-reviewをバックグラウンドで起動
-    timeout 5s "$SCRIPT_DIR/cc-gen-review.sh" --custom-command "refactor" "$TEST_SESSION" &
+    timeout 5s "$SCRIPT_DIR/cc-gc-review.sh" --custom-command "refactor" "$TEST_SESSION" &
     local pid=$!
     sleep 2
     
@@ -111,7 +111,7 @@ teardown() {
     [ "$status" -ne 0 ]
     
     # cc-gen-reviewをバックグラウンドで起動
-    timeout 3s "$SCRIPT_DIR/cc-gen-review.sh" "$TEST_SESSION" &
+    timeout 3s "$SCRIPT_DIR/cc-gc-review.sh" "$TEST_SESSION" &
     local pid=$!
     sleep 1
     
@@ -127,7 +127,7 @@ teardown() {
     tmux new-session -d -s "$TEST_SESSION"
     
     # cc-gen-reviewをバックグラウンドで起動
-    timeout 3s "$SCRIPT_DIR/cc-gen-review.sh" -v "$TEST_SESSION" &
+    timeout 3s "$SCRIPT_DIR/cc-gc-review.sh" -v "$TEST_SESSION" &
     local pid=$!
     sleep 1
     
@@ -140,7 +140,7 @@ teardown() {
 
 @test "auto-claude-launch should send claude command to tmux" {
     # cc-gen-reviewをバックグラウンドで起動
-    timeout 5s "$SCRIPT_DIR/cc-gen-review.sh" -c "$TEST_SESSION" &
+    timeout 5s "$SCRIPT_DIR/cc-gc-review.sh" -c "$TEST_SESSION" &
     local pid=$!
     sleep 3
     
@@ -159,7 +159,7 @@ teardown() {
     tmux new-session -d -s "$TEST_SESSION"
     
     # cc-gen-reviewを--resendオプションで起動
-    timeout 5s "$SCRIPT_DIR/cc-gen-review.sh" --resend "$TEST_SESSION" &
+    timeout 5s "$SCRIPT_DIR/cc-gc-review.sh" --resend "$TEST_SESSION" &
     local pid=$!
     sleep 2
     
@@ -178,7 +178,7 @@ teardown() {
     tmux new-session -d -s "$TEST_SESSION"
     
     # cc-gen-reviewをバックグラウンドで起動
-    timeout 8s "$SCRIPT_DIR/cc-gen-review.sh" -v "$TEST_SESSION" &
+    timeout 8s "$SCRIPT_DIR/cc-gc-review.sh" -v "$TEST_SESSION" &
     local pid=$!
     sleep 3
     
@@ -198,7 +198,7 @@ teardown() {
     tmux new-session -d -s "$TEST_SESSION"
     
     # cc-gen-reviewをバックグラウンドで起動
-    timeout 5s "$SCRIPT_DIR/cc-gen-review.sh" -v "$TEST_SESSION" &
+    timeout 5s "$SCRIPT_DIR/cc-gc-review.sh" -v "$TEST_SESSION" &
     local pid=$!
     sleep 2
     
@@ -215,7 +215,7 @@ teardown() {
 
 @test "should handle signal interruption gracefully" {
     # cc-gen-reviewをバックグラウンドで起動
-    "$SCRIPT_DIR/cc-gen-review.sh" -v "$TEST_SESSION" &
+    "$SCRIPT_DIR/cc-gc-review.sh" -v "$TEST_SESSION" &
     local pid=$!
     sleep 2
     

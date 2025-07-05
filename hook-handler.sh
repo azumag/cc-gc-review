@@ -7,11 +7,11 @@ set -uo pipefail
 
 # 設定
 TMP_DIR="/tmp"
-VERBOSE="${CC_GEN_REVIEW_VERBOSE:-false}"
+VERBOSE="${CC_GC_REVIEW_VERBOSE:-false}"
 GIT_DIFF_MODE=false
 GIT_COMMIT_MODE=false
 YOLO_MODE=false
-LOG_FILE="/tmp/cc-gen-review-hook.log"
+LOG_FILE="/tmp/cc-gc-review-hook.log"
 
 # ログ関数
 log() {

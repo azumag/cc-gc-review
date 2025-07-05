@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# cc-gen-review.sh - Claude Code と Gemini を stop hook 連携させるサポートツール
+# cc-gc-review.sh - Claude Code と Gemini を stop hook 連携させるサポートツール
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ CUSTOM_COMMAND=""
 RESEND_EXISTING=false
 MAX_REVIEWS=4
 INFINITE_REVIEW=false
-REVIEW_COUNT_FILE="/tmp/cc-gen-review-count"
+REVIEW_COUNT_FILE="/tmp/cc-gc-review-count"
 
 # ログ関数
 log() {
@@ -402,7 +402,7 @@ watch_with_polling() {
 
 # シグナルハンドラー
 cleanup() {
-    log "Shutting down cc-gen-review..."
+    log "Shutting down cc-gc-review..."
     exit 0
 }
 
@@ -412,7 +412,7 @@ trap cleanup INT TERM
 main() {
     parse_args "$@"
     
-    echo "=== cc-gen-review starting ==="
+    echo "=== cc-gc-review starting ==="
     echo "Session name: $SESSION_NAME"
     echo "Review file: $TMP_DIR/gemini-review"
     echo "Think mode: $THINK_MODE"
@@ -428,7 +428,7 @@ main() {
     fi
     echo "============================="
     
-    log "Starting cc-gen-review with session: $SESSION_NAME"
+    log "Starting cc-gc-review with session: $SESSION_NAME"
     
     # tmuxセッションのセットアップ
     setup_tmux_session "$SESSION_NAME"

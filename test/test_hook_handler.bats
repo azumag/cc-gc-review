@@ -11,8 +11,8 @@ setup() {
     mkdir -p "$TEST_TMP_DIR"
     
     # 環境変数の設定
-    export CC_GEN_REVIEW_VERBOSE="true"
-    export CC_GEN_REVIEW_TMP_DIR="$TEST_TMP_DIR"
+    export CC_GC_REVIEW_VERBOSE="true"
+    export CC_GC_REVIEW_TMP_DIR="$TEST_TMP_DIR"
     
     # テスト用のトランスクリプトファイル作成
     export TEST_TRANSCRIPT="$TEST_TMP_DIR/test-transcript.jsonl"
@@ -29,10 +29,10 @@ teardown() {
     # テスト用ファイルの削除
     rm -f /tmp/gemini-review* 2>/dev/null || true
     rm -f /tmp/gemini-prompt* 2>/dev/null || true
-    rm -f /tmp/cc-gen-review-hook.log* 2>/dev/null || true
+    rm -f /tmp/cc-gc-review-hook.log* 2>/dev/null || true
     
     # 環境変数のクリーンアップ
-    unset CC_GEN_REVIEW_VERBOSE CC_GEN_REVIEW_TMP_DIR
+    unset CC_GC_REVIEW_VERBOSE CC_GC_REVIEW_TMP_DIR
 }
 
 @test "should extract work summary from transcript file" {
@@ -386,8 +386,8 @@ EOF
     
     [ "$status" -eq 0 ]
     # ログファイルにYOLOモードの記録があることを確認
-    [ -f "/tmp/cc-gen-review-hook.log" ]
-    run cat "/tmp/cc-gen-review-hook.log"
+    [ -f "/tmp/cc-gc-review-hook.log" ]
+    run cat "/tmp/cc-gc-review-hook.log"
     [[ "$output" =~ "YOLO_MODE: true" ]]
 }
 
@@ -413,10 +413,10 @@ EOF
     
     [ "$status" -eq 0 ]
     # ログファイルが作成されることを確認
-    [ -f "/tmp/cc-gen-review-hook.log" ]
+    [ -f "/tmp/cc-gc-review-hook.log" ]
     
     # ログファイルの内容を確認
-    run cat "/tmp/cc-gen-review-hook.log"
+    run cat "/tmp/cc-gc-review-hook.log"
     [[ "$output" =~ "Hook handler started" ]]
     [[ "$output" =~ "Hook handler completed" ]]
 }

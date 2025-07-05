@@ -10,11 +10,11 @@ published: false
 
 プログラミング中に「今書いたコード、第三者の視点でレビューしてもらいたい」と思うことはありませんか？Claude Codeでコーディングしていると、作業が一段落したタイミングで別のAIの意見も聞きたくなることがあります。
 
-この記事では、Claude Codeの作業終了時に自動的にGeminiでコードレビューを実行し、その結果をClaude Codeに戻すツール「cc-gen-review」を紹介します。
+この記事では、Claude Codeの作業終了時に自動的にGeminiでコードレビューを実行し、その結果をClaude Codeに戻すツール「cc-gc-review」を紹介します。
 
 # 何ができるのか
 
-cc-gen-reviewは以下のような流れで動作します：
+cc-gc-reviewは以下のような流れで動作します：
 
 1. Claude Codeで作業を行う
 2. 作業が終了すると、stop hookが発動
@@ -43,7 +43,7 @@ Claude Codeには、特定のイベント時にカスタムスクリプトを実
 システムは3つのコンポーネントで構成されています：
 
 1. **hook-handler.sh**: Claude Codeから呼び出されるハンドラー
-2. **cc-gen-review.sh**: ファイル監視とtmux制御を行うメインプロセス
+2. **cc-gc-review.sh**: ファイル監視とtmux制御を行うメインプロセス
 3. **tmux**: Claude CodeとGeminiレビュー結果の橋渡し
 
 ```
@@ -53,7 +53,7 @@ hook-handler.sh
     ↓ (作業内容抽出)
 Gemini API
     ↓ (レビュー結果をファイルに保存)
-cc-gen-review.sh (ファイル監視)
+cc-gc-review.sh (ファイル監視)
     ↓ (tmux send-keys)
 Claude Code (レビュー受信)
 ```
@@ -90,7 +90,7 @@ review_result=$(echo "$summary" | gemini -p -s -y "作業内容をレビュー�
 echo "$review_result" > "/tmp/gemini-review"
 ```
 
-## 2. cc-gen-review.sh
+## 2. cc-gc-review.sh
 
 ファイル監視とtmuxセッション管理を行うメインスクリプトです。
 
@@ -161,8 +161,8 @@ tmux send-keys -t claude "レビュー内容" Enter
 ## 1. インストール
 
 ```bash
-git clone https://github.com/yourusername/cc-gen-review.git
-cd cc-gen-review
+git clone https://github.com/yourusername/cc-gc-review.git
+cd cc-gc-review
 chmod +x *.sh
 ```
 
@@ -173,7 +173,7 @@ chmod +x *.sh
 ```json
 {
   "hooks": {
-    "stop": "/path/to/cc-gen-review/hook-handler.sh --git-diff --yolo"
+    "stop": "/path/to/cc-gc-review/hook-handler.sh --git-diff --yolo"
   }
 }
 ```
@@ -195,7 +195,7 @@ hook-handler.shでは以下のオプションを使用できます：
 ```json
 {
   "hooks": {
-    "stop": "/path/to/cc-gen-review/hook-handler.sh"
+    "stop": "/path/to/cc-gc-review/hook-handler.sh"
   }
 }
 ```
@@ -204,31 +204,31 @@ hook-handler.shでは以下のオプションを使用できます：
 
 ```bash
 # 基本的な使い方
-./cc-gen-review.sh claude
+./cc-gc-review.sh claude
 
 # Claudeも自動起動
-./cc-gen-review.sh -c claude
+./cc-gc-review.sh -c claude
 
 # thinkモードを有効化（レビュー後に深い思考を促す）
-./cc-gen-review.sh --think claude
+./cc-gc-review.sh --think claude
 
 # カスタムコマンド付き（レビュー先頭に/refactorを付加）
-./cc-gen-review.sh --custom-command "refactor" claude
+./cc-gc-review.sh --custom-command "refactor" claude
 
 # レビュー数を制限
-./cc-gen-review.sh --max-reviews 10 claude
+./cc-gc-review.sh --max-reviews 10 claude
 
 # 無制限にレビュー
-./cc-gen-review.sh --infinite-review claude
+./cc-gc-review.sh --infinite-review claude
 
 # オプション組み合わせ
-./cc-gen-review.sh --think --custom-command "optimize" -c -v claude
+./cc-gc-review.sh --think --custom-command "optimize" -c -v claude
 ```
 
 起動すると以下のような表示が出ます：
 
 ```
-=== cc-gen-review starting ===
+=== cc-gc-review starting ===
 Session name: claude
 Review file: /tmp/gemini-review
 Think mode: true
@@ -250,9 +250,9 @@ Press Ctrl+C to stop watching...
 
 手順：
 
-1. cc-gen-reviewを起動：
+1. cc-gc-reviewを起動：
 ```bash
-./cc-gen-review.sh -c claude
+./cc-gc-review.sh -c claude
 ```
 
 2. 別ターミナルでtmuxセッションにアタッチ：
@@ -266,7 +266,7 @@ tmux attach-session -t claude
 
 ## 1. 無限ループの防止
 
-stop hookから新たな入力があると、それがまたstop hookを発動させる可能性があります。cc-gen-reviewでは複数の仕組みで無限ループを防止しています：
+stop hookから新たな入力があると、それがまたstop hookを発動させる可能性があります。cc-gc-reviewでは複数の仕組みで無限ループを防止しています：
 
 ### 基本的な防止機能
 ```bash
@@ -280,13 +280,13 @@ fi
 
 ```bash
 # レビュー数を制限（デフォルト: 4回）
-./cc-gen-review.sh claude
+./cc-gc-review.sh claude
 
 # 制限を変更
-./cc-gen-review.sh --max-reviews 10 claude
+./cc-gc-review.sh --max-reviews 10 claude
 
 # 制限を無効化
-./cc-gen-review.sh --infinite-review claude
+./cc-gc-review.sh --infinite-review claude
 ```
 
 ### インタラクティブ確認
@@ -301,7 +301,7 @@ fi
 ```
 
 ### カウントファイル管理
-`/tmp/cc-gen-review-count`でレビュー数を追跡し、新しいファイル更新時にリセットされます。
+`/tmp/cc-gc-review-count`でレビュー数を追跡し、新しいファイル更新時にリセットされます。
 
 ## 2. 複数のファイル監視方式
 
@@ -340,7 +340,7 @@ fi
 
 ```bash
 # リファクタリングを促すコマンド
-./cc-gen-review.sh --custom-command "refactor" claude
+./cc-gc-review.sh --custom-command "refactor" claude
 
 # レビュー結果は以下の形式で送信されます：
 /refactor
@@ -355,7 +355,7 @@ fi
 `--think`オプションを使用すると、レビュー内容の末尾に`think`コマンドが追加され、Claudeがより深く考察します：
 
 ```bash
-./cc-gen-review.sh --think claude
+./cc-gc-review.sh --think claude
 
 # レビュー結果は以下の形式で送信されます：
 [Geminiからのレビュー内容]
@@ -384,7 +384,7 @@ think
 ## 環境変数による設定
 
 ```bash
-export CC_GEN_REVIEW_VERBOSE="true"
+export CC_GC_REVIEW_VERBOSE="true"
 ```
 
 ## レビュープロンプトのカスタマイズ
@@ -411,7 +411,7 @@ tmux list-sessions  # 既存のセッションを確認
 ## レビューが送信されない
 
 - 一時ディレクトリの権限を確認
-- verboseモードで詳細ログを確認: `./cc-gen-review.sh -v claude`
+- verboseモードで詳細ログを確認: `./cc-gc-review.sh -v claude`
 - gemini-cliがインストールされているか確認
 
 ## "open terminal failed: not a terminal"エラー
@@ -423,7 +423,7 @@ tmux list-sessions  # 既存のセッションを確認
 ## パターン1: 基本的なレビューワークフロー
 
 ```bash
-./cc-gen-review.sh -c claude
+./cc-gc-review.sh -c claude
 ```
 
 Claude Codeで作業し、終了時にGeminiの客観的なレビューを受け取って改善。
@@ -431,7 +431,7 @@ Claude Codeで作業し、終了時にGeminiの客観的なレビューを受け
 ## パターン2: リファクタリング重視
 
 ```bash
-./cc-gen-review.sh --custom-command "refactor" claude
+./cc-gc-review.sh --custom-command "refactor" claude
 ```
 
 レビューを受けた後、自動的にリファクタリングモードに入り、コード改善を実施。
@@ -439,7 +439,7 @@ Claude Codeで作業し、終了時にGeminiの客観的なレビューを受け
 ## パターン3: 深い考察モード
 
 ```bash
-./cc-gen-review.sh --think --custom-command "analyze" claude
+./cc-gc-review.sh --think --custom-command "analyze" claude
 ```
 
 分析コマンドでレビューを開始し、その後深い思考モードで包括的な検討を実施。
@@ -447,14 +447,14 @@ Claude Codeで作業し、終了時にGeminiの客観的なレビューを受け
 ## パターン4: デバッグ・トラブルシューティング
 
 ```bash
-./cc-gen-review.sh --custom-command "debug" -v claude
+./cc-gc-review.sh --custom-command "debug" -v claude
 ```
 
 デバッグモードでレビューを受け、詳細ログで動作を確認。
 
 # まとめ
 
-cc-gen-reviewを使うことで、Claude Codeでの開発中に自動的にGeminiのレビューを受けることができます。異なるAIの視点を取り入れることで、コード品質の向上が期待できます。
+cc-gc-reviewを使うことで、Claude Codeでの開発中に自動的にGeminiのレビューを受けることができます。異なるAIの視点を取り入れることで、コード品質の向上が期待できます。
 
 特に以下の機能により、柔軟なワークフローが実現できます：
 
