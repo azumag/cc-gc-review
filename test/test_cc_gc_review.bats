@@ -15,7 +15,7 @@ setup() {
     # Use mktemp for safer temporary directory creation
     export TEST_TMP_DIR
     TEST_TMP_DIR=$(mktemp -d)
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
     export SCRIPT_DIR
     
     # Set up cleanup trap
