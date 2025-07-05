@@ -29,10 +29,10 @@ jobs:
         cd test
         ./run_tests.sh -f test_hook_handler.bats
     
-    - name: Run cc-gen-review tests
+    - name: Run cc-gc-review tests
       run: |
         cd test
-        ./run_tests.sh -f test_cc_gen_review.bats
+        ./run_tests.sh -f test_cc_gc_review.bats
     
     - name: Run all tests
       run: |

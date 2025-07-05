@@ -2,8 +2,8 @@
 
 # test_review_count.bats - Review count functionality tests
 
-load 'bats-support'
-load 'bats-assert'
+load 'test_helper/bats-support/load'
+load 'test_helper/bats-assert/load'
 
 setup() {
     # Clean up any leftover test directories first

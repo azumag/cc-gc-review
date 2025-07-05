@@ -2,8 +2,8 @@
 
 # test_watch_reset.bats - Tests for watch functions and reset behavior
 
-load 'bats-support'
-load 'bats-assert'
+load 'test_helper/bats-support/load'
+load 'test_helper/bats-assert/load'
 
 setup() {
     # Clean up any leftover test directories first
