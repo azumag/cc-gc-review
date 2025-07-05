@@ -121,7 +121,7 @@ setup_ci_environment() {
         fi
 
         # Batsヘルパーライブラリのパスを設定
-        export BATS_LIB_PATH="$TEST_DIR/test_helper/bats-support:$TEST_DIR/test_helper/bats-assert:$BATS_LIB_PATH"
+        export BATS_LIB_PATH="$TEST_DIR/test_helper/bats-support:$TEST_DIR/test_helper/bats-assert:${BATS_LIB_PATH:-}"
 
         echo -e "${GREEN}✓ CI environment setup completed${NC}"
     fi
