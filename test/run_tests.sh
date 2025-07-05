@@ -144,8 +144,8 @@ run_tests() {
 
     # Batsヘルパーライブラリを明示的にソースする
     # CI環境のワーキングディレクトリがtest/であるため、相対パスで指定
-    source "${SCRIPT_DIR}/test_helper/bats-support/load.bash"
-    source "${SCRIPT_DIR}/test_helper/bats-assert/load.bash"
+    source "${SCRIPT_DIR}/test_helper/bats-support/src/load.bash"
+    source "${SCRIPT_DIR}/test_helper/bats-assert/src/load.bash"
 
     if [ "$VERBOSE" = true ]; then
         bats_options="--verbose-run"
