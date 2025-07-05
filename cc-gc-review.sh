@@ -254,8 +254,8 @@ watch_review_files() {
                 local send_result=$?
                 
                 if [[ $send_result -eq 1 ]]; then
-                    echo "⚠️  Review limit reached during resend. Exiting."
-                    exit 1
+                    echo "⚠️  Review limit reached during resend. Continuing to monitor..."
+                    # Continue to monitoring instead of exiting
                 elif [[ $send_result -eq 2 ]]; then
                     echo "👋 Exiting by user request during resend."
                     exit 0
@@ -285,7 +285,11 @@ watch_with_inotify() {
     log "Using inotifywait for file monitoring"
     
     while true; do
-        inotifywait -e modify,create "/tmp" 2>/dev/null | while read -r dir event file; do
+        # Use a temporary file to avoid subshell issues with pipe
+        local tmp_output="$(mktemp)"
+        inotifywait -e modify,create "/tmp" 2>/dev/null > "$tmp_output"
+        
+        while read -r dir event file; do
             if [[ "$file" == "gemini-review" ]]; then
                 local filepath="$dir$file"
                 log "Detected change in: $filepath"
@@ -303,6 +307,7 @@ watch_with_inotify() {
                             # Continue monitoring instead of exiting
                         elif [[ $send_result -eq 2 ]]; then
                             echo "👋 Exiting watch mode by user request."
+                            rm -f "$tmp_output"
                             exit 0
                         fi
                     else
@@ -310,7 +315,9 @@ watch_with_inotify() {
                     fi
                 fi
             fi
-        done
+        done < "$tmp_output"
+        
+        rm -f "$tmp_output"
     done
 }
 
