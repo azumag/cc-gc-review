@@ -9,7 +9,8 @@ setup() {
     # テスト用の設定
     export TEST_TMP_DIR
     TEST_TMP_DIR=$(mktemp -d)
-    export SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")"/.. && pwd)"
+    export SCRIPT_DIR
     
     # Set up cleanup trap
     trap 'cleanup_test_env' EXIT INT TERM

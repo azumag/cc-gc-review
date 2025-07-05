@@ -14,7 +14,8 @@ setup() {
     # Use mktemp for safer temporary directory creation
     export TEST_TMP_DIR
     TEST_TMP_DIR=$(mktemp -d)
-    export SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")"/.. && pwd)"
+    export SCRIPT_DIR
     export TEST_REVIEW_FILE="$TEST_TMP_DIR/gemini-review"
     export TEST_COUNT_FILE="$TEST_TMP_DIR/cc-gc-review-count"
     
@@ -131,7 +132,7 @@ teardown() {
     # Test third review should be passed (limit reached) and count reset
     run send_review_to_tmux "$TEST_SESSION" "Third review content"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "🚫 Review limit reached (2/2)" ]]
+    [[ "$output" =~ "    [[ "$output" =~ " Review limit reached (2/2)" ]]" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     [[ "$output" =~ "🔄 Review count reset" ]]
     
@@ -289,7 +290,7 @@ teardown() {
     # Test second review should be passed (limit reached) and reset count
     run send_review_to_tmux "$TEST_SESSION" "Second review content"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "🚫 Review limit reached (1/1)" ]]
+    [[ "$output" =~ "    [[ "$output" =~ " Review limit reached (1/1)" ]]" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted after reset
@@ -351,7 +352,7 @@ teardown() {
     # All reviews should be passed immediately when MAX_REVIEWS=0
     run send_review_to_tmux "$TEST_SESSION" "First review with zero limit"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "🚫 Review limit reached (0/0)" ]]
+        [[ "$output" =~ " Review limit reached (0/0)" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should not exist

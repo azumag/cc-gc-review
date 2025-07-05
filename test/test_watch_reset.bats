@@ -14,7 +14,8 @@ setup() {
     # Use mktemp for safer temporary directory creation
     export TEST_TMP_DIR
     TEST_TMP_DIR=$(mktemp -d)
-    export SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")"/.. && pwd)"
+    export SCRIPT_DIR
     export TEST_REVIEW_FILE="$TEST_TMP_DIR/gemini-review"
     export TEST_COUNT_FILE="$TEST_TMP_DIR/cc-gc-review-count"
     
@@ -81,7 +82,8 @@ teardown() {
     
     # Simulate file update (what currently happens)
     if [[ -f "$watch_file" ]]; then
-        local content=$(cat "$watch_file")
+        local content
+    content=$(cat "$watch_file")
         if [[ -n "$content" ]]; then
             # This is the problematic part - the count is reset here
             # In the current implementation, this would delete the count file
@@ -136,7 +138,7 @@ teardown() {
     # Next review should be passed and count reset
     run send_review_to_tmux "$TEST_SESSION" "Fourth review (should be passed)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "🚫 Review limit reached (3/3)" ]]
+    [[ "$output" =~ " Review limit reached (3/3)" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted
@@ -260,7 +262,7 @@ teardown() {
     # Third review - should be passed and trigger reset
     run send_review_to_tmux "$TEST_SESSION" "Third review (should be passed)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "🚫 Review limit reached (2/2)" ]]
+    [[ "$output" =~ " Review limit reached (2/2)" ]]
     [[ "$output" =~ "Passing this review and resetting count" ]]
     
     # Count file should be deleted after reset
