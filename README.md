@@ -10,11 +10,9 @@ Claude CodeとGeminiをstop hook連携させるサポートツール
 
 ## 🚀 クイックスタート
 
-Claude Codeの作業を自動でGeminiにレビューさせる最も簡単な方法：
-
 ### 1. 設定
 
-`~/.claude/settings.json` に以下を追加するだけ：
+`~/.claude/settings.json` に以下を追加する：
 
 ```json
 {
@@ -26,7 +24,6 @@ Claude Codeの作業を自動でGeminiにレビューさせる最も簡単な方
 
 **注意**: `/path/to/cc-gc-review/` の部分は、実際にクローンした場所のパスに置き換えてください。
 
-これだけで、Claude Codeでの作業完了時に自動的にGeminiがレビューを実行し、結果をClaude Codeに直接表示します。
 
 ### 2. 必要な環境
 
