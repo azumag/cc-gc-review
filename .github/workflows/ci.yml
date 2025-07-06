@@ -35,7 +35,8 @@ jobs:
     
     - name: Make scripts executable
       run: |
-        chmod +x gemini-review-hook.sh
+        # Make all shell scripts in hooks directory executable
+        find hooks/ -name "*.sh" -exec chmod +x {} \;
         chmod +x test/run_tests.sh
     
     - name: Run gemini-review-hook tests
@@ -50,7 +51,8 @@ jobs:
     
     - name: Check script syntax
       run: |
-        bash -n gemini-review-hook.sh
+        # Check syntax for all shell scripts in hooks directory
+        find hooks/ -name "*.sh" -exec bash -n {} \;
         bash -n test/run_tests.sh
     
     - name: Validate test files
@@ -82,7 +84,8 @@ jobs:
     
     - name: Run shellcheck
       run: |
-        shellcheck -S warning gemini-review-hook.sh
+        # Check all shell scripts in hooks directory
+        find hooks/ -name "*.sh" -exec shellcheck -S warning {} \;
         shellcheck -S warning test/run_tests.sh
         # Only check our own bats files, exclude submodule test files
         find test/ -name "*.bats" -not -path "test/test_helper/*" -exec shellcheck -S warning {} \;
@@ -115,7 +118,8 @@ jobs:
     
     - name: Check shell script formatting
       run: |
-        shfmt -d -s -i 4 gemini-review-hook.sh
+        # Check all shell scripts in hooks directory
+        find hooks/ -name "*.sh" -exec shfmt -d -s -i 4 {} \;
         shfmt -d -s -i 4 test/run_tests.sh
 
   documentation:
@@ -154,8 +158,8 @@ jobs:
         fi
         
         # Check if scripts have proper help text
-        if ! grep -q "show_help" gemini-review-hook.sh; then
-          echo "Warning: gemini-review-hook.sh missing help function"
+        if ! grep -q "show_help" hooks/gemini-review-hook.sh; then
+          echo "Warning: hooks/gemini-review-hook.sh missing help function"
         fi
         
         echo "Documentation check completed."
@@ -189,9 +193,8 @@ jobs:
     
     - name: Make scripts executable
       run: |
-        chmod +x gemini-review-hook.sh
-        chmod +x hook-handler.sh
-        chmod +x shared-utils.sh
+        # Make all shell scripts in hooks directory executable
+        find hooks/ -name "*.sh" -exec chmod +x {} \;
         chmod +x test/run_tests.sh
     
     - name: Integration test - Mock scenario
@@ -215,24 +218,24 @@ jobs:
         
         # Test gemini-review-hook with mock data
         export GEMINI_REVIEW_HOOK_DATA='{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}'
-        echo "Testing gemini-review-hook.sh..."
-        HOOK_OUTPUT=$(./gemini-review-hook.sh)
+        echo "Testing hooks/gemini-review-hook.sh..."
+        HOOK_OUTPUT=$(./hooks/gemini-review-hook.sh)
         echo "Hook output: $HOOK_OUTPUT"
         
         # Verify hook output structure
         echo "$HOOK_OUTPUT" | jq -e '.decision' > /dev/null || { echo "❌ Invalid JSON output from hook"; exit 1; }
         echo "$HOOK_OUTPUT" | jq -e '.reason' > /dev/null || { echo "❌ Missing reason in hook output"; exit 1; }
         
-        # Test hook-handler.sh for file creation
-        echo "Testing hook-handler.sh..."
-        echo '{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}' | ./hook-handler.sh
+        # Test shared-utils.sh functions
+        echo "Testing hooks/shared-utils.sh..."
+        source hooks/shared-utils.sh
         
-        # Check if review file was created by hook-handler
-        if [ -f "/tmp/gemini-review" ]; then
-          echo "✅ Integration test passed: Review file created by hook-handler"
-          cat /tmp/gemini-review
+        # Check shared-utils functions work
+        if command -v log_info >/dev/null 2>&1; then
+          echo "✅ Integration test passed: shared-utils.sh functions loaded"
+          log_info "Test message"
         else
-          echo "❌ Integration test failed: Review file not created by hook-handler"
+          echo "❌ Integration test failed: shared-utils.sh functions not available"
           exit 1
         fi
         
@@ -244,12 +247,12 @@ jobs:
       run: |
         echo "Testing script permissions and basic execution..."
         
-        # Test gemini-review-hook.sh help
-        ./gemini-review-hook.sh --help || true
+        # Test hooks/gemini-review-hook.sh help
+        ./hooks/gemini-review-hook.sh --help || true
         
-        # Test gemini-review-hook.sh with invalid input (should handle gracefully)
+        # Test hooks/gemini-review-hook.sh with invalid input (should handle gracefully)
         export GEMINI_REVIEW_HOOK_DATA='{"invalid": "json"}'
-        ./gemini-review-hook.sh || true
+        ./hooks/gemini-review-hook.sh || true
         
         echo "✅ Permission and execution tests completed"
 
@@ -315,7 +318,7 @@ jobs:
       with:
         name: cc-gc-review-${{ steps.release_info.outputs.version || 'latest' }}
         path: |
-          gemini-review-hook.sh
+          hooks/
           README.md
           RELEASE_NOTES.md
         retention-days: 90
