@@ -119,7 +119,7 @@ create_discord_payload() {
   "content": "🎉 **${task_title}** 🎉",
   "embeds": [
     {
-      "title": "option",
+      "title": "detail",
       "color": 5763719,
       "fields": [
         {
@@ -131,7 +131,7 @@ create_discord_payload() {
           "name": "Branch",
           "value": ${branch_json},
           "inline": true
-        },
+        }
       ],
       "footer": {
         "text": "Claude Code"

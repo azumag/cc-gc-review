@@ -13,7 +13,7 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 - `gemini-review-hook.sh` - Claude Code作業完了時にGeminiでレビューを実行し結果を表示するメインフック
 - `notification.sh` - Claude Code作業完了時にDiscordへ通知メッセージを送信するスクリプト
 - `push-review-complete.sh` - レビュー完了後に未コミット変更を自動的にコミット・プッシュするスクリプト
-- `ci-monitor-hook.sh` - プッシュ後にGitHub Actions CIの状態を監視し、CI失敗時に通知するスクリプト
+- `ci-monitor-hook.sh` - プッシュ後にGitHub Actions CIの状態を監視し、CI失敗時に通知するオプショナルスクリプト
 - `shared-utils.sh` - トランスクリプト解析などの共通機能を提供するユーティリティライブラリ
 
 **tmux連携機能について**: 以前提供していたtmux連携機能は、設定の複雑さとメンテナンスコストを考慮し、現在は非推奨となっています。シンプルで安定した動作を重視し、Claude Codeの標準的なhook機能のみを使用する現在の方式を推奨します。tmux連携が必要な場合（例：tmuxセッション内でのインタラクティブな操作や、複数セッション間での結果共有が必須の場合）は、[レガシー版のドキュメント](deprecated/README-legacy.md)を参照してください。
@@ -239,9 +239,13 @@ Geminiのレビューで改善点がない場合（`REVIEW_COMPLETED`）に、�
 
 **注意**: このスクリプトは自動的にコミット・プッシュを行うため、意図しない変更が含まれていないか事前に確認することを推奨します。また、`gemini-review-hook.sh` との実行順序に依存関係があるため、hookの設定には注意が必要です。
 
-### ci-monitor-hook.sh - CI監視フック
+### ci-monitor-hook.sh - CI監視フック（オプション）
 
-プッシュ後にGitHub Actions CIの状態を監視し、CI失敗時にユーザーに通知するスクリプトです。このスクリプトは、`REVIEW_COMPLETED && PUSH COMPLETED` のマークが付いた作業のみを対象とし、CIワークフローの完了を自動的に追跡します。
+プッシュ後にGitHub Actions CIの状態を監視し、CI失敗時にユーザーに通知するオプショナルなスクリプトです。
+
+**前提条件**: このスクリプトは`push-review-complete.sh`が実行され、`REVIEW_COMPLETED && PUSH COMPLETED`のマークが付いた作業のみを対象とします。単独では機能しません。
+
+**注意**: この機能はオプションです。CI監視により処理時間が最大5分延長されるため、必要性を慎重に検討してください。
 
 #### 機能
 
@@ -257,25 +261,20 @@ Geminiのレビューで改善点がない場合（`REVIEW_COMPLETED`）に、�
 - git - リポジトリ情報の取得用
 - GitHub認証 - `gh auth login`で認証済みである必要がある
 
-#### フック設定例
+#### 使用場面
 
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "type": "command",
-        "command": "/path/to/cc-gc-review/hooks/ci-monitor-hook.sh",
-        "timeout": 360
-      }
-    ]
-  }
-}
-```
+このフックは以下の場合に有用です：
+- CI/CDパイプラインが重要なプロジェクト
+- CIの成功/失敗を即座に知りたい場合
+- チーム開発でのCI状態共有が必要な場合
+
+#### フック設定
+
+**実用的な設定は[複数のhookを同時に使用する場合](#複数のhookを同時に使用する場合)セクションの推奨構成を参照してください。**
 
 **注意**: 
-- タイムアウト値は最大監視時間（300秒）より少し長めに設定することを推奨
-- `/path/to/cc-gc-review/hooks/ci-monitor-hook.sh`の部分は、実際のパスに置き換えてください
+- CI監視フックはネットワーク通信を伴うため、他のローカルで完結するフックと比較して処理時間が大幅に長くなる傾向があります
+- タイムアウト値は最大監視時間（300秒）より長めに設定することを推奨
 
 #### 決定ブロック動作
 
@@ -301,7 +300,12 @@ Would you like me to help analyze and fix the CI failures?
 
 ### 複数のhookを同時に使用する場合
 
-`gemini-review-hook.sh`、`push-review-complete.sh`、`ci-monitor-hook.sh`、`notification.sh`を組み合わせて使用する場合は、以下のように設定します：
+#### 構成選択の判断基準
+
+- **基本構成**: 通常の開発ワークフロー（推奨）
+- **CI監視付き構成**: CI/CDが重要で即座のフィードバックが必要な場合
+
+#### 推奨構成
 
 ```json
 {
@@ -323,11 +327,12 @@ Would you like me to help analyze and fix the CI failures?
             "type": "command",
             "command": "/path/to/cc-gc-review/hooks/push-review-complete.sh"
           },
-          {
-            "type": "command",
-            "command": "/path/to/cc-gc-review/hooks/ci-monitor-hook.sh",
-            "timeout": 360
-          },
+          // CI監視が必要な場合のみ以下をコメントアウト
+          // {
+          //   "type": "command",
+          //   "command": "/path/to/cc-gc-review/hooks/ci-monitor-hook.sh",
+          //   "timeout": 360
+          // },
           {
             "type": "command",
             "command": "/path/to/cc-gc-review/hooks/notification.sh",
@@ -340,8 +345,15 @@ Would you like me to help analyze and fix the CI failures?
 }
 ```
 
-**注意**: 
-- hookは**並列実行**されます（順番に実行されるわけではありません）。ただし、`push-review-complete.sh` のように、他のhookの完了に依存するhookは、その依存関係を考慮して設定する必要があります。
+#### 依存関係と実行タイミング
+
+- **`ci-monitor-hook.sh`の依存関係**: `push-review-complete.sh`の完了が前提条件
+- **実行時間**: CI監視フックのタイムアウト値が360秒であるため、処理は最大で360秒（6分）延長される可能性があります
+- **並列実行の注意**: hooksは並列実行されるため、依存関係のあるCI監視フックは適切なタイミング制御が重要
+
+#### 設定時の注意事項
+
+- hookは**並列実行**されます（順番に実行されるわけではありません）
 - 各hookは独立して動作し、前のhookの失敗は次のhookの実行を妨げません
 - `timeout`は各hookごとに設定可能です（デフォルト60秒）
 - いずれかのhookがタイムアウトした場合、実行中の全てのhookがキャンセルされます
