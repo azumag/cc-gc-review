@@ -60,9 +60,15 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
 EOF
         exit 0
     fi
-    # if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_RATE_LIMITED"; then
-    #     exit 0
-    # fi
+    if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_RATE_LIMITED"; then
+        cat <<EOF
+{
+  "decision": "allow",
+  "reason": "Gemini rate limited - allowing with Claude self-review"
+}
+EOF
+        exit 0
+    fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
 else
     debug_log "TRANSCRIPT" "Transcript file not found or not accessible"
