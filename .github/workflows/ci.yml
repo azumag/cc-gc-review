@@ -40,10 +40,13 @@ jobs:
     
     - name: Validate test files
       run: |
-        for file in test/*.bats; do
+        echo "Validating bats test files by running them..."
+        cd test
+        for file in *.bats; do
           if [ -f "$file" ]; then
-            bash -n "$file" || {
-              echo "Syntax error in $file"
+            echo "Testing $file..."
+            bats "$file" || {
+              echo "Test failed in $file"
               exit 1
             }
           fi
