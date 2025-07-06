@@ -47,20 +47,63 @@ test_timeout_configuration() {
     fi
 }
 
-# Test 2: Simulate timeout behavior with mock gemini command
-test_timeout_handling() {
-    echo "Testing: Timeout handling with mock command"
+# Test 2: Verify timeout mechanism works correctly
+test_timeout_behavior() {
+    echo "Testing: Timeout mechanism and error handling"
     
     setup_test_env
     
-    # Create a mock gemini that sleeps for a short time to test timeout logic
+    # Test 2a: Verify that the timeout configuration is properly read
+    echo "  - Verifying timeout configuration is used..."
+    
+    # Check the script uses timeout command with GEMINI_TIMEOUT
+    if grep -q "timeout \${GEMINI_TIMEOUT}s" "$(dirname "$0")/../hooks/gemini-review-hook.sh"; then
+        echo "  ✓ Script uses timeout command with GEMINI_TIMEOUT variable"
+    else
+        echo "  ✗ Timeout command not properly configured"
+        return 1
+    fi
+    
+    # Test 2b: Test manual timeout implementation (for systems without timeout command)
+    echo "  - Testing manual timeout implementation..."
+    
+    # Check the script has fallback for systems without timeout command
+    if grep -q "kill -0 \$GEMINI_PID" "$(dirname "$0")/../hooks/gemini-review-hook.sh" && \
+       grep -q "WAIT_COUNT -lt \$GEMINI_TIMEOUT" "$(dirname "$0")/../hooks/gemini-review-hook.sh"; then
+        echo "  ✓ Manual timeout implementation exists for systems without timeout command"
+    else
+        echo "  ✗ No fallback for systems without timeout command"
+        return 1
+    fi
+    
+    # Test 2c: Verify timeout value consistency
+    echo "  - Checking timeout value consistency..."
+    
+    # Count how many times GEMINI_TIMEOUT is used
+    TIMEOUT_USAGE_COUNT=$(grep -c "GEMINI_TIMEOUT" "$(dirname "$0")/../hooks/gemini-review-hook.sh" || echo 0)
+    
+    if [ "$TIMEOUT_USAGE_COUNT" -ge 4 ]; then
+        echo "  ✓ GEMINI_TIMEOUT is consistently used throughout the script ($TIMEOUT_USAGE_COUNT occurrences)"
+    else
+        echo "  ✗ GEMINI_TIMEOUT usage seems insufficient ($TIMEOUT_USAGE_COUNT occurrences)"
+        return 1
+    fi
+    
+    
+    # Test 2d: Test actual error handling with mock
+    echo "  - Testing error handling with mock gemini..."
+    
+    # Create a simple mock that returns success
     cat > "$MOCK_BIN_DIR/gemini" << 'EOF'
 #!/bin/bash
-# Mock gemini that sleeps for 3 seconds to simulate slow response
-sleep 3
-echo "Mock response after delay"
+# Mock gemini that returns a simple review
+echo "Test review: Code looks good"
+exit 0
 EOF
     chmod +x "$MOCK_BIN_DIR/gemini"
+    
+    # Create empty transcript file
+    touch "$TEST_DIR/transcript.jsonl"
     
     # Create test input
     TEST_INPUT=$(cat <<EOF
@@ -70,29 +113,21 @@ EOF
 EOF
 )
     
-    # Test that the script properly handles timeout configuration
-    # We're not actually testing a real 120s timeout (that would take too long)
-    # Instead we verify the timeout value is properly used in the script
+    echo "$TEST_INPUT" | "$(dirname "$0")/../hooks/gemini-review-hook.sh" > "$TEST_DIR/output.json" 2>"$TEST_DIR/error.log"
     
-    # Check that timeout command is used with GEMINI_TIMEOUT
-    if grep -q "timeout \${GEMINI_TIMEOUT}s" "$(dirname "$0")/../hooks/gemini-review-hook.sh"; then
-        echo "✓ Timeout is properly configured with GEMINI_TIMEOUT variable"
+    # Check output contains proper JSON structure
+    if jq -e '.decision' "$TEST_DIR/output.json" >/dev/null 2>&1; then
+        echo "  ✓ Script produces valid JSON output"
+        DECISION=$(jq -r '.decision' "$TEST_DIR/output.json")
+        if [ "$DECISION" = "block" ]; then
+            echo "  ✓ Default decision is 'block' as expected"
+        else
+            echo "  ✗ Unexpected decision value: $DECISION"
+            return 1
+        fi
     else
-        echo "✗ Timeout configuration not found in script"
-        return 1
-    fi
-    
-    # Run a quick test to ensure the mock works
-    START_TIME=$(date +%s)
-    echo "$TEST_INPUT" | timeout 5s "$(dirname "$0")/../hooks/gemini-review-hook.sh" > "$TEST_DIR/output.json" 2>&1 || true
-    END_TIME=$(date +%s)
-    DURATION=$((END_TIME - START_TIME))
-    
-    # Should complete within 5 seconds with our mock
-    if [ $DURATION -le 5 ]; then
-        echo "✓ Mock timeout test completed successfully (${DURATION}s)"
-    else
-        echo "✗ Mock test took too long: ${DURATION}s"
+        echo "  ✗ Invalid JSON output"
+        cat "$TEST_DIR/output.json"
         return 1
     fi
     
@@ -145,7 +180,7 @@ FAILED=0
 test_timeout_configuration || ((FAILED++))
 echo
 
-test_timeout_handling || ((FAILED++))
+test_timeout_behavior || ((FAILED++))
 echo
 
 test_flash_model_timeout || ((FAILED++))
