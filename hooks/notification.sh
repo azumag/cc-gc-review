@@ -56,7 +56,7 @@ find_transcript_path() {
     return 1
 }
 
-# Extract task title from work summary
+# Extract simple task title from work summary (last line)
 extract_task_title() {
     local summary="$1"
     
@@ -65,31 +65,14 @@ extract_task_title() {
         return
     fi
     
-    # Look for action words and extract the main task
-    local title=""
-    
-    # Try to extract key action phrases
-    if echo "$summary" | grep -q -i "fix\|修正\|解決"; then
-        title=$(echo "$summary" | grep -o -i "[^.]*fix[^.]*\|[^.]*修正[^.]*\|[^.]*解決[^.]*" | head -1 | head -c 50)
-    elif echo "$summary" | grep -q -i "add\|追加\|実装\|implement"; then
-        title=$(echo "$summary" | grep -o -i "[^.]*add[^.]*\|[^.]*追加[^.]*\|[^.]*実装[^.]*\|[^.]*implement[^.]*" | head -1 | head -c 50)
-    elif echo "$summary" | grep -q -i "refactor\|improve\|update\|リファクタ\|改善\|更新"; then
-        title=$(echo "$summary" | grep -o -i "[^.]*refactor[^.]*\|[^.]*improve[^.]*\|[^.]*update[^.]*\|[^.]*リファクタ[^.]*\|[^.]*改善[^.]*\|[^.]*更新[^.]*" | head -1 | head -c 50)
-    else
-        # Fallback: extract first meaningful sentence or phrase
-        title=$(echo "$summary" | sed 's/[.!?].*//' | head -c 50)
-    fi
+    # Extract the last meaningful line as title (simplified approach)
+    local title=$(echo "$summary" | grep -v "^$" | tail -n 1 | head -c 80)
     
     # Clean up and format title
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
     
     # Remove bullet points and common prefixes
     title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//')
-    
-    # Add ellipsis if truncated
-    if [ ${#title} -lt ${#summary} ] && [ ${#title} -gt 40 ]; then
-        title="${title}..."
-    fi
     
     # Fallback if title is too short or empty
     if [ ${#title} -lt 10 ]; then
@@ -99,42 +82,22 @@ extract_task_title() {
     echo "$title"
 }
 
-# Get comprehensive work summary from Claude Code transcript
+# Get full work summary from Claude Code transcript
 get_work_summary() {
     local transcript_path="$1"
     local summary=""
     
     if [ -f "$transcript_path" ]; then
-        # Get recent assistant messages (not just the last one)
-        local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
+        # Get the complete last assistant message (no character limit)
+        summary=$(extract_last_assistant_message "$transcript_path" 0)
         
-        # Extract last 3 assistant messages to get more comprehensive summary
-        local recent_messages=$(tail -n 50 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 3)
-        
-        if [ -n "$recent_messages" ]; then
-            # Combine recent messages with newlines, focusing on substantive content
-            summary=$(echo "$recent_messages" | grep -v "^$" | head -c 800)
+        # If summary is very short, try to get more context from recent messages
+        if [ ${#summary} -lt 100 ]; then
+            local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
+            local recent_messages=$(tail -n 30 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 2)
             
-            # If we got multiple messages, format them nicely
-            if [ $(echo "$recent_messages" | wc -l) -gt 1 ]; then
-                summary=$(echo "$recent_messages" | tail -n 2 | sed 's/^/• /' | tr '\n' ' ')
-            fi
-        fi
-        
-        # Fallback to single last message if multiple messages didn't work well
-        if [ -z "$summary" ] || [ ${#summary} -lt 50 ]; then
-            summary=$(extract_last_assistant_message "$transcript_path" 0)
-        fi
-        
-        # Limit summary to 1000 characters to avoid Discord message limits
-        if [ ${#summary} -gt 1000 ]; then
-            if [ ${#summary} -gt 800 ]; then
-                local first_part=$(echo "$summary" | head -c 400)
-                local last_part=$(echo "$summary" | tail -c 400)
-                summary="${first_part}...(中略)...${last_part}"
-            else
-                summary=$(echo "$summary" | head -c 1000)
-                summary="${summary}...(truncated)"
+            if [ -n "$recent_messages" ]; then
+                summary=$(echo "$recent_messages" | grep -v "^$")
             fi
         fi
     fi
