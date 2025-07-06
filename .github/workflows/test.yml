@@ -38,7 +38,8 @@ jobs:
         
     - name: Make scripts executable
       run: |
-        chmod +x *.sh
+        # Make all shell scripts in hooks directory executable
+        find hooks/ -name "*.sh" -exec chmod +x {} \;
         chmod +x test/*.sh
         
     - name: Run test setup
@@ -92,7 +93,7 @@ jobs:
         
     - name: Check script executability
       run: |
-        [ -x gemini-review-hook.sh ] || (echo "gemini-review-hook.sh is not executable" && exit 1)
+        [ -x hooks/gemini-review-hook.sh ] || (echo "hooks/gemini-review-hook.sh is not executable" && exit 1)
         [ -x test/run_tests.sh ] || (echo "test/run_tests.sh is not executable" && exit 1)
         [ -x test/setup_test.sh ] || (echo "test/setup_test.sh is not executable" && exit 1)
 
