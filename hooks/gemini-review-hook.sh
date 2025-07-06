@@ -150,6 +150,32 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     fi
 fi
 
+# Gather git information for review context
+GIT_STATUS=""
+GIT_DIFF=""
+GIT_LOG=""
+
+if git rev-parse --git-dir >/dev/null 2>&1; then
+    debug_log "GIT" "Gathering git information for review context"
+    
+    # Get git status
+    GIT_STATUS=$(git status --porcelain 2>/dev/null || echo "Unable to get git status")
+    
+    # Get recent changes (staged and unstaged)
+    GIT_DIFF=$(git diff HEAD 2>/dev/null || echo "Unable to get git diff")
+    if [ -z "$GIT_DIFF" ]; then
+        # If no diff from HEAD, try staged changes
+        GIT_DIFF=$(git diff --cached 2>/dev/null || echo "No staged changes")
+    fi
+    
+    # Get recent commit log
+    GIT_LOG=$(git log --oneline -n 3 2>/dev/null || echo "Unable to get git log")
+    
+    debug_log "GIT" "Git status length: ${#GIT_STATUS}, diff length: ${#GIT_DIFF}, log length: ${#GIT_LOG}"
+else
+    debug_log "GIT" "Not in a git repository"
+fi
+
 REVIEW_PROMPT=$(
     cat <<EOF
 - あなたは厳しく厳格な性格を保つAIとして振る舞ってください
@@ -157,7 +183,17 @@ REVIEW_PROMPT=$(
 - 決して阿ってはいけません。
 - ただし、正しいことについてはきちんと評価すること。
 - 作業内容をレビューして、改善点や注意点を指摘してください。
-重要: 自分で git diff を実行またはコミットログを確認し、作業ファイルの具体的な変更内容も把握してからレビューを行ってください。
+
+## Git の現在の状態:
+
+### Git Status:
+${GIT_STATUS}
+
+### Git Diff (最近の変更):
+${GIT_DIFF}
+
+### 最近のコミット履歴:
+${GIT_LOG}
 
 ## Claude の最後の発言（作業まとめ）:
 ${CLAUDE_SUMMARY}
