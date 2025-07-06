@@ -11,12 +11,142 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Common output helper functions
+log_info() { echo -e "${BLUE}$*${NC}"; }
+log_success() { echo -e "${GREEN}$*${NC}"; }
+log_warning() { echo -e "${YELLOW}$*${NC}"; }
+log_error() { echo -e "${RED}$*${NC}" >&2; }
+log_header() { echo -e "${BLUE}=== $* ===${NC}"; }
+log_step() { echo -e "\n${YELLOW}$*${NC}"; }
+
 # スクリプトのディレクトリを取得
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
-echo -e "${BLUE}=== Shell Script Test Runner ===${NC}"
-echo "Test directory: $TEST_DIR"
+# Global temporary file tracking for cleanup
+declare -a TEMP_FILES=()
+
+# Robust cleanup function
+cleanup_temp_files() {
+    local exit_code=$?
+    if [ ${#TEMP_FILES[@]} -gt 0 ]; then
+        log_warning "Cleaning up ${#TEMP_FILES[@]} temporary files..."
+        for temp_file in "${TEMP_FILES[@]}"; do
+            [ -f "$temp_file" ] && rm -f "$temp_file"
+        done
+        TEMP_FILES=()
+    fi
+    exit $exit_code
+}
+
+# Set trap for cleanup on script exit
+trap cleanup_temp_files EXIT INT TERM
+
+# Create tracked temporary file
+create_temp_file() {
+    local temp_file
+    temp_file=$(mktemp)
+    TEMP_FILES+=("$temp_file")
+    echo "$temp_file"
+}
+
+# Validate essential dependencies
+validate_dependencies() {
+    local missing_deps=()
+    local optional_deps=()
+    local required_commands=("jq" "bash")
+    local optional_commands=("timeout" "bats")
+    
+    for cmd in "${required_commands[@]}"; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing_deps+=("$cmd")
+        fi
+    done
+    
+    for cmd in "${optional_commands[@]}"; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            optional_deps+=("$cmd")
+        fi
+    done
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        log_error "Missing required dependencies: ${missing_deps[*]}"
+        log_error "Please install missing commands before running tests"
+        return 1
+    fi
+    
+    if [ ${#optional_deps[@]} -gt 0 ]; then
+        log_warning "Missing optional dependencies: ${optional_deps[*]}"
+        log_warning "Some test features may be limited or unreliable"
+    fi
+    
+    return 0
+}
+
+# JSON schema validation function
+validate_json_config() {
+    local config_file="$1"
+    
+    # Validate JSON is parseable
+    if ! jq '.' "$config_file" >/dev/null 2>&1; then
+        log_error "Invalid JSON in config file: $config_file"
+        return 1
+    fi
+    
+    # Basic structure validation
+    if ! jq -e '.shell_tests | type == "array"' "$config_file" >/dev/null 2>&1; then
+        log_error "Invalid config: 'shell_tests' must be an array"
+        return 1
+    fi
+    
+    if ! jq -e '.error_patterns | type == "object"' "$config_file" >/dev/null 2>&1; then
+        log_error "Invalid config: 'error_patterns' must be an object"
+        return 1
+    fi
+    
+    # Validate error_patterns structure
+    local required_patterns=("critical" "errors" "warnings")
+    for pattern in "${required_patterns[@]}"; do
+        if ! jq -e ".error_patterns.$pattern | type == \"array\"" "$config_file" >/dev/null 2>&1; then
+            log_error "Invalid config: error_patterns.$pattern must be an array"
+            return 1
+        fi
+    done
+    
+    # Validate each test has required fields and file exists
+    local test_count
+    test_count=$(jq -r '.shell_tests | length' "$config_file")
+    for ((i=0; i<test_count; i++)); do
+        if ! jq -e ".shell_tests[$i] | has(\"file\") and has(\"description\")" "$config_file" >/dev/null 2>&1; then
+            log_error "Invalid config: Test $i missing required fields (file, description)"
+            return 1
+        fi
+        
+        local test_file
+        test_file=$(jq -r ".shell_tests[$i].file" "$config_file")
+        if [ ! -f "$test_file" ]; then
+            log_warning "Test file does not exist: $test_file (will fail during execution)"
+        fi
+        
+        # Validate timeout is a positive number
+        local timeout_val
+        timeout_val=$(jq -r ".shell_tests[$i].timeout // 60" "$config_file")
+        if ! [[ "$timeout_val" =~ ^[0-9]+$ ]] || [ "$timeout_val" -le 0 ]; then
+            log_error "Invalid config: Test $i timeout must be a positive integer"
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
+log_header "Shell Script Test Runner"
+log_info "Test directory: $TEST_DIR"
+
+# Validate dependencies first
+if ! validate_dependencies; then
+    exit 1
+fi
 
 # 使用方法の表示
 show_usage() {
@@ -77,7 +207,7 @@ while [[ $# -gt 0 ]]; do
         exit 0
         ;;
     *)
-        echo -e "${RED}Unknown option: $1${NC}"
+        log_error "Unknown option: $1"
         show_usage
         exit 1
         ;;
@@ -86,7 +216,7 @@ done
 
 # テスト前のクリーンアップ
 cleanup_before_test() {
-    echo -e "${YELLOW}Cleaning up test environment...${NC}"
+    log_step "Cleaning up test environment..."
 
     # 既存のテスト用tmuxセッションを終了
     tmux list-sessions 2>/dev/null | grep "test-claude" | cut -d: -f1 | xargs -I {} tmux kill-session -t {} 2>/dev/null || true
@@ -100,13 +230,13 @@ cleanup_before_test() {
     # mktemp で作成された一時ディレクトリも削除
     find /tmp -maxdepth 1 -name "tmp.*" -type d -user "$(whoami)" -mtime +1 -exec rm -rf {} + 2>/dev/null || true
 
-    echo -e "${GREEN}✓ Cleanup completed${NC}"
+    log_success "✓ Cleanup completed"
 }
 
 # CI環境の検出と対応
 setup_ci_environment() {
     if [ "${CI:-false}" = "true" ]; then
-        echo -e "${YELLOW}CI environment detected, applying CI-specific settings...${NC}"
+        log_warning "CI environment detected, applying CI-specific settings..."
 
         # CI環境でのtmuxの初期化
         export TMUX_TMPDIR=/tmp
@@ -116,7 +246,7 @@ setup_ci_environment() {
 
         # Batsヘルパーライブラリの自動セットアップ
         if [ ! -d "test_helper/bats-support" ] || [ ! -d "test_helper/bats-assert" ] || [ ! -d "test_helper/bats-file" ]; then
-            echo -e "${YELLOW}Setting up bats helper libraries for CI...${NC}"
+            log_warning "Setting up bats helper libraries for CI..."
             mkdir -p test_helper
 
             # bats-supportをダウンロード
@@ -135,7 +265,7 @@ setup_ci_environment() {
             fi
         fi
 
-        echo -e "${GREEN}✓ CI environment setup completed${NC}"
+        log_success "✓ CI environment setup completed"
     fi
 }
 
@@ -148,7 +278,7 @@ export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_
 
 # 必要なツールの確認
 if ! command -v bats >/dev/null 2>&1; then
-    echo -e "${RED}Error: bats is not installed${NC}"
+    log_error "bats is not installed"
     echo "Please run: ./setup_test.sh"
     exit 1
 fi
@@ -167,17 +297,17 @@ run_tests() {
 
     if [ -n "$TEST_FILE" ]; then
         if [ ! -f "$TEST_FILE" ]; then
-            echo -e "${RED}Error: Test file not found: $TEST_FILE${NC}"
+            log_error "Test file not found: $TEST_FILE"
             exit 1
         fi
-        echo -e "${YELLOW}Running specific test file: $TEST_FILE${NC}"
+        log_step "Running specific test file: $TEST_FILE"
         if [ -n "$TEST_PATTERN" ]; then
             bats "$bats_options" --filter "$TEST_PATTERN" "$TEST_FILE"
         else
             bats "$bats_options" "$TEST_FILE"
         fi
     else
-        echo -e "${YELLOW}Running all test files...${NC}"
+        log_step "Running all test files..."
         
         # Run BATS tests
         if [ -n "$TEST_PATTERN" ]; then
@@ -192,14 +322,38 @@ run_tests() {
         # Load test configuration from external JSON file
         local config_file="${TEST_DIR}/test-config.json"
         if [ ! -f "$config_file" ]; then
-            echo -e "${RED}Error: Test configuration file not found: $config_file${NC}" >&2
+            log_error "Test configuration file not found: $config_file"
             return 1
+        fi
+        
+        # Validate JSON configuration structure
+        if ! validate_json_config "$config_file"; then
+            log_error "Configuration validation failed"
+            return 1
+        fi
+        
+        # Check test-specific dependencies
+        local test_deps
+        test_deps=$(jq -r '.shell_tests[].required_dependencies[]?' "$config_file" 2>/dev/null | sort -u)
+        if [ -n "$test_deps" ]; then
+            local missing_test_deps=()
+            while IFS= read -r dep; do
+                [ -z "$dep" ] && continue
+                if ! command -v "$dep" >/dev/null 2>&1; then
+                    missing_test_deps+=("$dep")
+                fi
+            done <<< "$test_deps"
+            
+            if [ ${#missing_test_deps[@]} -gt 0 ]; then
+                log_warning "Missing test dependencies: ${missing_test_deps[*]}"
+                log_warning "Some tests may fail or be skipped"
+            fi
         fi
         
         # Extract test definitions from JSON config
         local shell_tests_json
         if ! shell_tests_json=$(jq -r '.shell_tests[] | "\(.file):\(.description):\(.timeout // 60):\(.category)"' "$config_file" 2>/dev/null); then
-            echo -e "${RED}Error: Failed to parse test configuration${NC}" >&2
+            log_error "Failed to parse test configuration"
             return 1
         fi
         
@@ -215,6 +369,13 @@ run_tests() {
         max_error_indicators=$(jq -r '.output_limits.max_error_indicators // 5' "$config_file" 2>/dev/null)
         max_failed_cases=$(jq -r '.output_limits.max_failed_cases // 3' "$config_file" 2>/dev/null)
         
+        # Check Bash version for associative array support
+        if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+            echo -e "${RED}Error: Bash 4.0+ required for associative arrays (current: $BASH_VERSION)${NC}" >&2
+            echo -e "${YELLOW}Please upgrade Bash or run individual test scripts${NC}" >&2
+            return 1
+        fi
+        
         # Track test results with associative arrays for better maintainability
         declare -A test_results
         declare -A test_stdout_outputs
@@ -228,19 +389,27 @@ run_tests() {
             local test_file test_description test_timeout test_category
             IFS=':' read -r test_file test_description test_timeout test_category <<< "$test_spec"
             
-            echo -e "\n${YELLOW}Running $test_description (timeout: ${test_timeout}s)...${NC}"
+            log_step "\nRunning $test_description (timeout: ${test_timeout}s)..."
             
             # Create temporary files for stdout and stderr separation
             local stdout_file stderr_file
-            stdout_file=$(mktemp)
-            stderr_file=$(mktemp)
+            stdout_file=$(create_temp_file)
+            stderr_file=$(create_temp_file)
             
             # Run test with timeout and separated output streams
             local test_exit_code=0
             if command -v timeout >/dev/null 2>&1; then
                 timeout "${test_timeout}s" ./"$test_file" >"$stdout_file" 2>"$stderr_file" || test_exit_code=$?
             else
-                ./"$test_file" >"$stdout_file" 2>"$stderr_file" || test_exit_code=$?
+                # For critical tests, fail if timeout is not available
+                if [ "$test_timeout" -lt 30 ] && echo "$test_file" | grep -q "critical\|security\|core"; then
+                    log_error "Critical test $test_file requires timeout command for reliability"
+                    echo "Error: timeout command required for critical test" >"$stderr_file"
+                    test_exit_code=1
+                else
+                    log_warning "Running $test_file without timeout (timeout command unavailable)"
+                    ./"$test_file" >"$stdout_file" 2>"$stderr_file" || test_exit_code=$?
+                fi
             fi
             
             # Store results and outputs
@@ -249,10 +418,10 @@ run_tests() {
             stderr_content=$(cat "$stderr_file" 2>/dev/null)
             
             if [ "$test_exit_code" -eq 0 ]; then
-                echo -e "${GREEN}✓ $test_description passed${NC}"
+                log_success "✓ $test_description passed"
                 test_results["$test_file"]="PASSED"
             else
-                echo -e "${RED}✗ $test_description failed (exit code: $test_exit_code)${NC}"
+                log_error "✗ $test_description failed (exit code: $test_exit_code)"
                 test_results["$test_file"]="FAILED"
                 shell_tests_exit_code=1
             fi
@@ -261,14 +430,13 @@ run_tests() {
             test_stderr_outputs["$test_file"]="$stderr_content"
             test_categories["$test_file"]="$test_category"
             
-            # Cleanup temporary files
-            rm -f "$stdout_file" "$stderr_file"
+            # Note: Temporary files are automatically cleaned up by trap handler
             
         done <<< "$shell_tests_json"
         
         # Report detailed failure information if any tests failed
         if [ "$shell_tests_exit_code" -ne 0 ]; then
-            echo -e "\n${RED}=== SHELL TEST FAILURE ANALYSIS ===${NC}"
+            log_header "\nSHELL TEST FAILURE ANALYSIS"
             
             # Group failures by category
             declare -A category_failures
@@ -281,29 +449,29 @@ run_tests() {
             
             # Report failures by category
             for category in "${!category_failures[@]}"; do
-                echo -e "\n${BLUE}=== $category Test Failures ===${NC}"
+                log_header "\n$category Test Failures"
                 for test_file in ${category_failures[$category]}; do
-                    echo -e "\n${RED}Failed Test: $test_file${NC}"
+                    log_error "\nFailed Test: $test_file"
                     
                     local stdout_content="${test_stdout_outputs[$test_file]}"
                     local stderr_content="${test_stderr_outputs[$test_file]}"
                     
                     # Analyze stderr first (usually contains error information)
                     if [ -n "$stderr_content" ]; then
-                        echo -e "${YELLOW}Error Output (stderr, last $max_error_lines lines):${NC}"
+                        log_warning "Error Output (stderr, last $max_error_lines lines):"
                         echo "$stderr_content" | tail -n "$max_error_lines" | sed 's/^/  🔥 /'
                         
                         # Look for critical patterns first
                         local critical_lines
                         if critical_lines=$(echo "$stderr_content" | grep -E "($critical_patterns)" | head -"$max_error_indicators"); then
-                            echo -e "${RED}Critical Issues:${NC}"
+                            log_error "Critical Issues:"
                             echo "$critical_lines" | sed 's/^/  💥 /'
                         fi
                         
                         # Look for error patterns
                         local error_lines
                         if error_lines=$(echo "$stderr_content" | grep -E "($error_patterns)" | head -"$max_error_indicators"); then
-                            echo -e "${YELLOW}Error Indicators:${NC}"
+                            log_warning "Error Indicators:"
                             echo "$error_lines" | sed 's/^/  🔍 /'
                         fi
                     fi
@@ -312,44 +480,44 @@ run_tests() {
                     if [ -n "$stdout_content" ]; then
                         local failed_cases
                         if failed_cases=$(echo "$stdout_content" | grep -E "($error_patterns)" | head -"$max_failed_cases"); then
-                            echo -e "${YELLOW}Failed Test Cases:${NC}"
+                            log_warning "Failed Test Cases:"
                             echo "$failed_cases" | sed 's/^/  📋 /'
                         fi
                         
                         # Show warnings if any
                         local warning_lines
                         if warning_lines=$(echo "$stdout_content" | grep -E "($warning_patterns)" | head -3); then
-                            echo -e "${YELLOW}Warnings:${NC}"
+                            log_warning "Warnings:"
                             echo "$warning_lines" | sed 's/^/  ⚠️  /'
                         fi
                     fi
                     
-                    echo -e "${BLUE}$(printf '%.0s-' {1..50})${NC}"
+                    log_info "$(printf '%.0s-' {1..50})"
                 done
             done
             
-            echo -e "\n${YELLOW}Structured Debugging Guide:${NC}"
-            echo -e "  📝 Re-run specific test: ${BLUE}./\${test_file}${NC}"
-            echo -e "  🔍 Verbose mode: ${BLUE}./run_tests.sh -v${NC}"
-            echo -e "  📊 Analyze category: Check all ${BLUE}\${category}${NC} tests"
-            echo -e "  ⚙️  Check dependencies: $(jq -r '.shell_tests[].required_dependencies[]?' "$config_file" 2>/dev/null | sort -u | tr '\n' ' ')"
-            echo -e "  🧹 Clean environment: Remove stale sessions, clear temp files"
-            echo -e "  📋 Review config: ${BLUE}$config_file${NC}"
+            log_warning "\nStructured Debugging Guide:"
+            log_info "  📝 Re-run specific test: ./\${test_file}"
+            log_info "  🔍 Verbose mode: ./run_tests.sh -v"
+            log_info "  📊 Analyze category: Check all \${category} tests"
+            log_info "  ⚙️  Check dependencies: $(jq -r '.shell_tests[].required_dependencies[]?' "$config_file" 2>/dev/null | sort -u | tr '\n' ' ')"
+            log_info "  🧹 Clean environment: Remove stale sessions, clear temp files"
+            log_info "  📋 Review config: $config_file"
         fi
         
         # Report overall test results summary
-        echo -e "\n${BLUE}=== Test Execution Summary ===${NC}"
+        log_header "\nTest Execution Summary"
         if [ "$bats_exit_code" -eq 0 ]; then
-            echo -e "${GREEN}✓ BATS tests: PASSED${NC}"
+            log_success "✓ BATS tests: PASSED"
         else
-            echo -e "${RED}✗ BATS tests: FAILED${NC}"
-            echo -e "  ${YELLOW}Run with --verbose-run flag for detailed BATS output${NC}"
+            log_error "✗ BATS tests: FAILED"
+            log_warning "  Run with --verbose-run flag for detailed BATS output"
         fi
         
         if [ "$shell_tests_exit_code" -eq 0 ]; then
-            echo -e "${GREEN}✓ Shell script tests: PASSED${NC}"
+            log_success "✓ Shell script tests: PASSED"
         else
-            echo -e "${RED}✗ Shell script tests: FAILED${NC}"
+            log_error "✗ Shell script tests: FAILED"
         fi
         
         # Return failure if either BATS tests or shell script tests failed
@@ -366,18 +534,18 @@ show_results() {
     local exit_code=$1
 
     echo ""
-    echo -e "${BLUE}=== Test Results ===${NC}"
+    log_header "Test Results"
 
     if [ "$exit_code" -eq 0 ]; then
-        echo -e "${GREEN}✓ All tests passed!${NC}"
+        log_success "✓ All tests passed!"
     else
-        echo -e "${RED}✗ Some tests failed${NC}"
+        log_error "✗ Some tests failed"
         echo ""
-        echo "Troubleshooting tips:"
-        echo "  - Check if all required tools are installed (tmux, jq, timeout)"
-        echo "  - Ensure no conflicting tmux sessions are running"
-        echo "  - Run with -v flag for verbose output"
-        echo "  - Check individual test files for specific failures"
+        log_info "Troubleshooting tips:"
+        log_info "  - Check if all required tools are installed (tmux, jq, timeout)"
+        log_info "  - Ensure no conflicting tmux sessions are running"
+        log_info "  - Run with -v flag for verbose output"
+        log_info "  - Check individual test files for specific failures"
     fi
 
     return "$exit_code"
@@ -385,13 +553,13 @@ show_results() {
 
 # メイン処理
 main() {
-    echo -e "${YELLOW}Preparing test environment...${NC}"
+    log_step "Preparing test environment..."
 
     # 事前クリーンアップ
     cleanup_before_test
 
     # テストの実行
-    echo -e "${YELLOW}Starting tests...${NC}"
+    log_step "Starting tests..."
     echo ""
 
     if run_tests; then
@@ -403,7 +571,7 @@ main() {
 
 # トラップ設定（テスト終了時のクリーンアップ）
 trap_cleanup() {
-    echo -e "\n${YELLOW}Cleaning up after tests...${NC}"
+    log_step "\nCleaning up after tests..."
     cleanup_before_test
 }
 

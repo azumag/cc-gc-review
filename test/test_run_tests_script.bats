@@ -111,7 +111,7 @@ teardown() {
     run ./run_tests.sh
     
     assert_failure
-    assert_output --partial "Failed to parse test configuration"
+    assert_output --partial "Invalid JSON in config file"
 }
 
 @test "run_tests.sh: should detect and report test failures with structured output" {
