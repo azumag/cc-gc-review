@@ -139,7 +139,7 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
 
     # Limit CLAUDE_SUMMARY to configured length to avoid token limit
     # Use character-aware truncation instead of byte-based to handle multibyte characters safely
-    local original_length=${#CLAUDE_SUMMARY}
+    original_length=${#CLAUDE_SUMMARY}
     if [ $original_length -gt $CLAUDE_SUMMARY_MAX_LENGTH ]; then
         # Preserve important parts: first N chars + last N chars with separator
         FIRST_PART=$(printf "%.${CLAUDE_SUMMARY_PRESERVE_LENGTH}s" "$CLAUDE_SUMMARY")
