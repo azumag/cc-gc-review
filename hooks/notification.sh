@@ -119,7 +119,7 @@ create_discord_payload() {
   "content": "🎉 **${task_title}** 🎉",
   "embeds": [
     {
-      "title": ${title_json},
+      "title": "",
       "color": 5763719,
       "fields": [
         {
@@ -153,19 +153,32 @@ send_discord_notification() {
     local webhook_url="$1"
     local payload="$2"
     
-    if curl -X POST \
-        -H "Content-Type: application/json" \
-        -d "$payload" \
-        --fail \
-        --silent \
-        --show-error \
-        "$webhook_url"; then
-        echo "✅ Discord notification sent successfully"
-        return 0
-    else
-        echo "❌ Failed to send Discord notification" >&2
-        return 1
-    fi
+    # Add retry logic for Discord notifications
+    local max_retries=3
+    local retry_count=0
+    
+    while [ $retry_count -lt $max_retries ]; do
+        if curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 30 \
+            "$webhook_url"; then
+            echo "✅ Discord notification sent successfully"
+            return 0
+        else
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+                echo "⚠️ Discord notification failed, retrying ($retry_count/$max_retries)..." >&2
+                sleep 2
+            fi
+        fi
+    done
+    
+    echo "❌ Failed to send Discord notification after $max_retries attempts" >&2
+    return 1
 }
 
 # Main execution
@@ -237,7 +250,8 @@ main() {
             echo "✅ Discord notification sent for ${repo_name}/${branch}: ${task_title}"
         else
             echo "❌ Failed to send Discord notification for ${repo_name}/${branch}" >&2
-            exit 1
+            # Don't exit with error to avoid breaking the stop hook chain
+            # Just log the failure and continue
         fi
     else
         echo "⚠️  Discord webhook URL not configured in .env file"
