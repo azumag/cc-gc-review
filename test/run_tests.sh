@@ -191,41 +191,70 @@ run_tests() {
         
         # Run shell script tests for notification system and gemini hook
         local failed_tests=()
+        local test_outputs=()
         
         echo -e "\n${YELLOW}Running notification system tests...${NC}"
-        if ! ./test_notification_core.sh; then
+        local notification_output
+        if notification_output=$(./test_notification_core.sh 2>&1); then
+            echo -e "${GREEN}✓ Notification core tests passed${NC}"
+        else
             echo -e "${RED}✗ Notification core tests failed${NC}"
             failed_tests+=("test_notification_core.sh")
+            test_outputs+=("NOTIFICATION_CORE_OUTPUT:$notification_output")
             shell_tests_exit_code=1
-        else
-            echo -e "${GREEN}✓ Notification core tests passed${NC}"
         fi
         
         echo -e "\n${YELLOW}Running gemini hook integration tests...${NC}"
-        if ! ./test_gemini_content_only.sh; then
+        local gemini_output
+        if gemini_output=$(./test_gemini_content_only.sh 2>&1); then
+            echo -e "${GREEN}✓ Gemini hook content tests passed${NC}"
+        else
             echo -e "${RED}✗ Gemini hook content tests failed${NC}"
             failed_tests+=("test_gemini_content_only.sh")
+            test_outputs+=("GEMINI_HOOK_OUTPUT:$gemini_output")
             shell_tests_exit_code=1
-        else
-            echo -e "${GREEN}✓ Gemini hook content tests passed${NC}"
         fi
         
         echo -e "\n${YELLOW}Running notification workflow examples...${NC}"
-        if ! ./test_notification_examples.sh; then
+        local examples_output
+        if examples_output=$(./test_notification_examples.sh 2>&1); then
+            echo -e "${GREEN}✓ Notification examples tests passed${NC}"
+        else
             echo -e "${RED}✗ Notification examples tests failed${NC}"
             failed_tests+=("test_notification_examples.sh")
+            test_outputs+=("EXAMPLES_OUTPUT:$examples_output")
             shell_tests_exit_code=1
-        else
-            echo -e "${GREEN}✓ Notification examples tests passed${NC}"
         fi
         
         # Report detailed failure information if any tests failed
         if [ "$shell_tests_exit_code" -ne 0 ]; then
-            echo -e "\n${RED}Shell test failures summary:${NC}"
-            for failed_test in "${failed_tests[@]}"; do
-                echo -e "  ${RED}✗ $failed_test${NC}"
+            echo -e "\n${RED}=== SHELL TEST FAILURE DETAILS ===${NC}"
+            for i in "${!failed_tests[@]}"; do
+                local failed_test="${failed_tests[$i]}"
+                echo -e "\n${RED}Failed Test: $failed_test${NC}"
+                
+                # Extract and display the relevant output for this test
+                for output in "${test_outputs[@]}"; do
+                    if [[ "$output" == *"$(echo "$failed_test" | cut -d'_' -f2 | tr '[:lower:]' '[:upper:]')"* ]]; then
+                        local test_output="${output#*:}"
+                        echo -e "${YELLOW}Error Output:${NC}"
+                        # Show last 10 lines of error output to avoid overwhelming
+                        echo "$test_output" | tail -n 10 | sed 's/^/  /'
+                        
+                        # Look for specific error patterns
+                        if echo "$test_output" | grep -q "assertion failed\|Test failed\|Error:\|✗"; then
+                            echo -e "${YELLOW}Key Error Indicators:${NC}"
+                            echo "$test_output" | grep -E "(assertion failed|Test failed|Error:|✗)" | head -5 | sed 's/^/  🔍 /'
+                        fi
+                        break
+                    fi
+                done
+                echo -e "${BLUE}$(printf '%.0s-' {1..50})${NC}"
             done
-            echo -e "\n${YELLOW}To debug failed tests, run them individually with -v flag${NC}"
+            echo -e "\n${YELLOW}Debugging Tips:${NC}"
+            echo -e "  • Run failed tests individually: ${BLUE}./\${failed_test}${NC}"
+            echo -e "  • Use verbose mode: ${BLUE}./run_tests.sh -v${NC}"
+            echo -e "  • Check test dependencies: tmux, jq, timeout commands"
         fi
         
         # Report overall test results summary
