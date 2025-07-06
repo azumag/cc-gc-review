@@ -68,8 +68,9 @@ extract_task_title() {
     # Extract the last meaningful line as title
     local title=$(echo "$summary" | grep -v "^$" | tail -n 1)
     
-    # Clean up and format title
+    # Clean up and format title - remove Work Summary: prefix
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
+    title=$(echo "$title" | sed -e 's/^Work Summary:[[:space:]]*//' -e 's/^\*\*Work Summary\*\*:[[:space:]]*//')
     
     # Remove bullet points and common prefixes
     title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//')

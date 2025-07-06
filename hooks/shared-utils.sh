@@ -17,12 +17,14 @@ extract_last_assistant_message() {
     local result
     
     if [ "$line_limit" -gt 0 ]; then
-        if ! result=$(tail -n "$line_limit" "$transcript_path" | jq -r "$jq_filter" | tail -n 1); then
+        # Get last assistant message from limited lines
+        if ! result=$(tail -n "$line_limit" "$transcript_path" | tac | jq -r -s '.[] | select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text' | head -1); then
             echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
             return 1
         fi
     else
-        if ! result=$(jq -r "$jq_filter" "$transcript_path" | tail -n 1); then
+        # Get the complete last assistant message (all text parts concatenated)
+        if ! result=$(tac "$transcript_path" | jq -r -s '.[] | select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text' | head -1); then
             echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
             return 1
         fi
