@@ -52,9 +52,21 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100 false)
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
         debug_log "EXIT" "Found REVIEW_COMPLETED, allowing with JSON output"
+        cat <<EOF
+{
+  "decision": "approve",
+  "reason": "Review completed by Gemini - no further action needed"
+}
+EOF
         exit 0
     fi
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_RATE_LIMITED"; then
+        cat <<EOF
+{
+  "decision": "allow",
+  "reason": "Gemini rate limited - allowing with Claude self-review"
+}
+EOF
         exit 0
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
