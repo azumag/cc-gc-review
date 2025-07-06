@@ -3,6 +3,11 @@
 # Source shared utilities
 source "$(dirname "$0")/shared-utils.sh"
 
+# Configuration constants
+readonly CLAUDE_SUMMARY_MAX_LENGTH=1000
+readonly CLAUDE_SUMMARY_PRESERVE_LENGTH=400
+readonly GEMINI_TIMEOUT=120
+
 # Cleanup function for temporary files
 cleanup() {
     [ -n "${TEMP_STDOUT:-}" ] && rm -f "$TEMP_STDOUT"
@@ -11,21 +16,28 @@ cleanup() {
     # Clean up debug log files (only if debug mode was enabled)
     if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
         local log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
-        rm -f "$log_dir/gemini-review-hook.log" "$log_dir/gemini-review-error.log" "$log_dir/gemini-review-debug.log"
+        rm -f "$log_dir/gemini-review-hook-$$.log" "$log_dir/gemini-review-error-$$.log" "$log_dir/gemini-review-debug-$$.log"
     fi
 }
 
-# Debug logging function for intermediate stages
-debug_log() {
-    local stage="$1"
-    local message="$2"
+# Logging function with level support
+log_message() {
+    local level="$1"
+    local stage="$2"
+    local message="$3"
     
     # Only log if debug mode is enabled
     if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
-        local log_file="${GEMINI_HOOK_LOG_DIR:-/tmp}/gemini-review-debug.log"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$stage] $message" >>"$log_file"
+        local log_file="${GEMINI_HOOK_LOG_DIR:-/tmp}/gemini-review-debug-$$.log"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] [$stage] $message" >>"$log_file"
     fi
 }
+
+# Convenience functions for different log levels
+debug_log() { log_message "DEBUG" "$1" "$2"; }
+info_log() { log_message "INFO" "$1" "$2"; }
+warn_log() { log_message "WARN" "$1" "$2"; }
+error_log() { log_message "ERROR" "$1" "$2"; }
 
 # Check for required commands
 check_required_commands() {
@@ -41,14 +53,13 @@ check_required_commands() {
     
     if [ ${#missing_commands[@]} -gt 0 ]; then
         local error_msg="Missing required commands: ${missing_commands[*]}. Please install them before running this script."
-        debug_log "ERROR" "$error_msg" 2>/dev/null || true
         
-        # Handle JSON escaping manually if jq is not available
+        # Handle JSON escaping manually if jq is not available - comprehensive escaping
         if command -v jq >/dev/null 2>&1; then
             local escaped_msg=$(echo "$error_msg" | jq -Rs .)
         else
-            # Simple escaping for JSON without jq
-            local escaped_msg=\"$(echo "$error_msg" | sed 's/"/\\"/g')\"
+            # Comprehensive JSON escaping without jq
+            local escaped_msg=\"$(echo "$error_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g')\"
         fi
         
         cat <<EOF
@@ -61,14 +72,14 @@ EOF
     fi
 }
 
+# Check required commands are available early
+check_required_commands
+
 # Set trap for cleanup on script exit
 trap cleanup EXIT
 
-# Check required commands are available
-check_required_commands
-
 INPUT=$(cat)
-debug_log "START" "Script started, input received"
+info_log "START" "Script started, input received"
 
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path')
 debug_log "TRANSCRIPT" "Processing transcript path: $TRANSCRIPT_PATH"
@@ -120,20 +131,21 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
 
     # Check if extraction was successful
     if [ -z "$CLAUDE_SUMMARY" ]; then
-        debug_log "CLAUDE_SUMMARY" "Failed to extract Claude summary (no assistant messages found)"
+        warn_log "CLAUDE_SUMMARY" "Failed to extract Claude summary (no assistant messages found)"
         echo "[gemini-review-hook] Warning: Failed to extract Claude summary from transcript (no assistant messages found)" >&2
     else
         debug_log "CLAUDE_SUMMARY" "Successfully extracted Claude summary (${#CLAUDE_SUMMARY} characters)"
     fi
 
-    # Limit CLAUDE_SUMMARY to 1000 characters to avoid token limit
+    # Limit CLAUDE_SUMMARY to configured length to avoid token limit
     # Use character-aware truncation instead of byte-based to handle multibyte characters safely
-    if [ ${#CLAUDE_SUMMARY} -gt 1000 ]; then
-        # Preserve important parts: first 400 chars + last 400 chars with separator
-        FIRST_PART=$(printf "%.400s" "$CLAUDE_SUMMARY")
-        LAST_PART=$(echo "$CLAUDE_SUMMARY" | rev | cut -c1-400 | rev)
+    local original_length=${#CLAUDE_SUMMARY}
+    if [ $original_length -gt $CLAUDE_SUMMARY_MAX_LENGTH ]; then
+        # Preserve important parts: first N chars + last N chars with separator
+        FIRST_PART=$(printf "%.${CLAUDE_SUMMARY_PRESERVE_LENGTH}s" "$CLAUDE_SUMMARY")
+        LAST_PART=$(echo "$CLAUDE_SUMMARY" | rev | cut -c1-${CLAUDE_SUMMARY_PRESERVE_LENGTH} | rev)
         CLAUDE_SUMMARY="${FIRST_PART}...(中略)...${LAST_PART}"
-        debug_log "CLAUDE_SUMMARY" "Content truncated to preserve beginning and end (original: ${#CLAUDE_SUMMARY} chars)"
+        debug_log "CLAUDE_SUMMARY" "Content truncated to preserve beginning and end (original: $original_length chars)"
     fi
 fi
 
@@ -155,7 +167,6 @@ EOF
 debug_log "GEMINI" "Starting Gemini Pro model execution"
 TEMP_STDOUT=$(mktemp)
 TEMP_STDERR=$(mktemp)
-GEMINI_TIMEOUT=120
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
 if command -v timeout >/dev/null 2>&1; then
@@ -163,6 +174,7 @@ if command -v timeout >/dev/null 2>&1; then
     GEMINI_EXIT_CODE=$?
 else
     debug_log "GEMINI" "timeout command not available, using manual timeout handling"
+    >&2 echo "[gemini-review-hook] Warning: timeout command not available, using manual timeout handling"
     # Manual timeout management
     echo "$REVIEW_PROMPT" | gemini -s -y >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
     GEMINI_PID=$!
@@ -199,7 +211,7 @@ debug_log "GEMINI" "Review length: ${#GEMINI_REVIEW} characters, Error length: $
 IS_RATE_LIMIT=false
 if [[ $GEMINI_EXIT_CODE -eq 124 ]]; then
     # Timeout - treat as rate limit
-    debug_log "RATE_LIMIT" "Timeout detected (exit code 124), treating as rate limit"
+    warn_log "RATE_LIMIT" "Timeout detected (exit code 124), treating as rate limit"
     IS_RATE_LIMIT=true
 elif [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z $GEMINI_REVIEW ]]; then
     debug_log "RATE_LIMIT" "Checking error patterns for rate limit detection"
@@ -238,6 +250,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"
+        >&2 echo "[gemini-review-hook] Warning: timeout command not available for Flash model, using manual timeout handling"
         echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
         FLASH_PID=$!
 
@@ -272,7 +285,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
     fi
 elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
     # Other error - provide error details to user
-    debug_log "ERROR" "Non-rate-limit error occurred: exit code $GEMINI_EXIT_CODE"
+    error_log "ERROR" "Non-rate-limit error occurred: exit code $GEMINI_EXIT_CODE"
     ERROR_REASON="Gemini execution failed with exit code $GEMINI_EXIT_CODE"
     if [ -n "$ERROR_OUTPUT" ]; then
         ERROR_REASON="$ERROR_REASON. Error: $ERROR_OUTPUT"
@@ -291,8 +304,8 @@ fi
 if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
     debug_log "OUTPUT" "Saving final outputs to log files"
     local log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
-    echo "$GEMINI_REVIEW" >"$log_dir/gemini-review-hook.log"
-    echo "$ERROR_OUTPUT" >"$log_dir/gemini-review-error.log"
+    echo "$GEMINI_REVIEW" >"$log_dir/gemini-review-hook-$$.log"
+    echo "$ERROR_OUTPUT" >"$log_dir/gemini-review-error-$$.log"
     debug_log "OUTPUT" "Final review length: ${#GEMINI_REVIEW} characters"
 fi
 
