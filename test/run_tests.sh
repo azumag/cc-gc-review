@@ -25,16 +25,21 @@ show_usage() {
     echo "Options:"
     echo "  -f, --file FILE     Run specific test file"
     echo "  -t, --test NAME     Run specific test (pattern match)"
-    echo "  -v, --verbose       Verbose output"
+    echo "  -v, --verbose       Verbose output (use --verbose-run for detailed BATS output)"
     echo "  -p, --parallel      Run tests in parallel"
     echo "  -h, --help          Show this help"
     echo ""
+    echo "Test Types:"
+    echo "  BATS tests          Automated unit tests (*.bats files)"
+    echo "  Shell script tests  Integration tests for notification and gemini systems"
+    echo ""
     echo "Examples:"
-    echo "  $0                                   # Run all tests"
-    echo "  $0 -f test_gemini_review_hook.bats  # Run specific file"
-    echo "  $0 -t 'CLAUDE_SUMMARY.*extraction'  # Run tests matching pattern"
-    echo "  $0 -v                               # Verbose output"
-    echo "  $0 -p                               # Parallel execution"
+    echo "  $0                                      # Run all tests (BATS + shell scripts)"
+    echo "  $0 -f test_extract_last_assistant_message.bats  # Run specific BATS file"
+    echo "  $0 -t 'extract_last_assistant'          # Run tests matching pattern"
+    echo "  $0 -v                                   # Verbose shell output"
+    echo "  $0 -p                                   # Parallel BATS execution"
+    echo "  $0 --verbose-run                        # Detailed BATS output for debugging"
 }
 
 # デフォルト値
@@ -42,6 +47,7 @@ TEST_FILE=""
 TEST_PATTERN=""
 VERBOSE=false
 PARALLEL=false
+VERBOSE_RUN=false
 
 # 引数の解析
 while [[ $# -gt 0 ]]; do
@@ -56,6 +62,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     -v | --verbose)
         VERBOSE=true
+        shift
+        ;;
+    --verbose-run)
+        VERBOSE_RUN=true
         shift
         ;;
     -p | --parallel)
@@ -147,7 +157,7 @@ fi
 run_tests() {
     local bats_options=""
 
-    if [ "$VERBOSE" = true ]; then
+    if [ "$VERBOSE" = true ] || [ "$VERBOSE_RUN" = true ]; then
         bats_options="--verbose-run"
     fi
 
@@ -180,22 +190,57 @@ run_tests() {
         local shell_tests_exit_code=0
         
         # Run shell script tests for notification system and gemini hook
+        local failed_tests=()
+        
         echo -e "\n${YELLOW}Running notification system tests...${NC}"
         if ! ./test_notification_core.sh; then
             echo -e "${RED}✗ Notification core tests failed${NC}"
+            failed_tests+=("test_notification_core.sh")
             shell_tests_exit_code=1
+        else
+            echo -e "${GREEN}✓ Notification core tests passed${NC}"
         fi
         
         echo -e "\n${YELLOW}Running gemini hook integration tests...${NC}"
         if ! ./test_gemini_content_only.sh; then
             echo -e "${RED}✗ Gemini hook content tests failed${NC}"
+            failed_tests+=("test_gemini_content_only.sh")
             shell_tests_exit_code=1
+        else
+            echo -e "${GREEN}✓ Gemini hook content tests passed${NC}"
         fi
         
         echo -e "\n${YELLOW}Running notification workflow examples...${NC}"
         if ! ./test_notification_examples.sh; then
             echo -e "${RED}✗ Notification examples tests failed${NC}"
+            failed_tests+=("test_notification_examples.sh")
             shell_tests_exit_code=1
+        else
+            echo -e "${GREEN}✓ Notification examples tests passed${NC}"
+        fi
+        
+        # Report detailed failure information if any tests failed
+        if [ "$shell_tests_exit_code" -ne 0 ]; then
+            echo -e "\n${RED}Shell test failures summary:${NC}"
+            for failed_test in "${failed_tests[@]}"; do
+                echo -e "  ${RED}✗ $failed_test${NC}"
+            done
+            echo -e "\n${YELLOW}To debug failed tests, run them individually with -v flag${NC}"
+        fi
+        
+        # Report overall test results summary
+        echo -e "\n${BLUE}=== Test Execution Summary ===${NC}"
+        if [ "$bats_exit_code" -eq 0 ]; then
+            echo -e "${GREEN}✓ BATS tests: PASSED${NC}"
+        else
+            echo -e "${RED}✗ BATS tests: FAILED${NC}"
+            echo -e "  ${YELLOW}Run with --verbose-run flag for detailed BATS output${NC}"
+        fi
+        
+        if [ "$shell_tests_exit_code" -eq 0 ]; then
+            echo -e "${GREEN}✓ Shell script tests: PASSED${NC}"
+        else
+            echo -e "${RED}✗ Shell script tests: FAILED${NC}"
         fi
         
         # Return failure if either BATS tests or shell script tests failed
