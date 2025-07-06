@@ -135,6 +135,11 @@ npm install -g gemini-cli
 
 作業完了時にDiscordへ通知を送信するオプショナルなスクリプトです。`notification.sh`は`gemini-review-hook.sh`とは独立した機能であり、個別に設定が必要です。
 
+#### 機能
+
+- **スマートなタイトル抽出**: 詳細は[通知内容](#通知内容)セクションを参照
+- **リトライ機能とエラーハンドリング**: 通知送信失敗時に自動リトライし、hookチェーンを中断せずにエラーログを出力します。詳細は[通知内容](#通知内容)セクションを参照
+
 #### 必要な環境
 
 - terminal-notifier (macOS通知用、オプション)
@@ -165,7 +170,7 @@ sudo apt-get install libnotify-bin
              {
                "type": "command",
                "command": "/path/to/cc-gc-review/hooks/notification.sh",
-               "timeout": 30
+               "timeout": 60  // ネットワーク遅延やDiscord APIの一時的な問題に対応するため増加
              }
            ]
          }
@@ -206,11 +211,74 @@ sudo apt-get install libnotify-bin
 #### 通知内容
 
 通知には以下の情報が含まれます：
-- リポジトリ名
-- ブランチ名
-- 作業サマリー（Claude Codeのトランスクリプトから自動抽出）
-- デスクトップ通知（macOS: terminal-notifier、Ubuntu: notify-send）
+- **タイトル**: 作業サマリーの最後の行から自動抽出（短く意味のある内容）
+- **リポジトリ名**: 作業中のGitリポジトリ名
+- **ブランチ名**: 現在のGitブランチ
+- **作業サマリー**: Claude Codeのトランスクリプトから自動抽出（完全な内容）
+- **デスクトップ通知**: タイトルと基本情報のみの簡潔な通知
 
+Discord通知の例：
+```
+🎉 **Enhanced timeout settings** 🎉
+
+Repository: cc-gc-review
+Branch: fix/ci-error
+Work Summary: Work Summary: Fixed Discord notification issues
+
+1. Added retry logic for failed notifications
+2. Improved error handling and logging
+3. Fixed hook chain continuation
+4. Enhanced timeout settings
+```
+
+
+### push-review-complete.sh - 自動コミット・プッシュスクリプト
+
+Geminiのレビューで改善点がない場合（`REVIEW_COMPLETED`）に、未コミットの変更を自動的にコミットしてプッシュするスクリプトです。このスクリプトは、`gemini-review-hook.sh` が正常に完了し、かつレビュー結果が `REVIEW_COMPLETED` であった場合にのみ実行されることを想定しています。CIワークフローの最終段階で使用されます。
+
+**注意**: このスクリプトは自動的にコミット・プッシュを行うため、意図しない変更が含まれていないか事前に確認することを推奨します。また、`gemini-review-hook.sh` との実行順序に依存関係があるため、hookの設定には注意が必要です。
+
+### 複数のhookを同時に使用する場合
+
+`gemini-review-hook.sh`と`notification.sh`を両方使用したい場合は、以下のように設定します：
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Funk.aiff"  // macOS: 作業完了の音声通知（オプション）
+          },
+          {
+            "type": "command",
+            "command": "/path/to/cc-gc-review/hooks/gemini-review-hook.sh",
+            "timeout": 300
+          },
+          {
+            "type": "command",
+            "command": "/path/to/cc-gc-review/hooks/push-review-complete.sh"
+          },
+          {
+            "type": "command",
+            "command": "/path/to/cc-gc-review/hooks/notification.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**注意**: 
+- hookは**並列実行**されます（順番に実行されるわけではありません）。ただし、`push-review-complete.sh` のように、他のhookの完了に依存するhookは、その依存関係を考慮して設定する必要があります。
+- 各hookは独立して動作し、前のhookの失敗は次のhookの実行を妨げません
+- `timeout`は各hookごとに設定可能です（デフォルト60秒）
+- いずれかのhookがタイムアウトした場合、実行中の全てのhookがキャンセルされます
 
 ### 詳細ログの有効化
 
