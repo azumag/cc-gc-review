@@ -7,19 +7,65 @@ source "$(dirname "$0")/shared-utils.sh"
 cleanup() {
     [ -n "${TEMP_STDOUT:-}" ] && rm -f "$TEMP_STDOUT"
     [ -n "${TEMP_STDERR:-}" ] && rm -f "$TEMP_STDERR"
-    # Clean up debug log files
-    rm -f /tmp/gemini-review-hook.log /tmp/gemini-review-error.log /tmp/gemini-review-debug.log
+    
+    # Clean up debug log files (only if debug mode was enabled)
+    if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
+        local log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
+        rm -f "$log_dir/gemini-review-hook.log" "$log_dir/gemini-review-error.log" "$log_dir/gemini-review-debug.log"
+    fi
 }
 
 # Debug logging function for intermediate stages
 debug_log() {
     local stage="$1"
     local message="$2"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$stage] $message" >>/tmp/gemini-review-debug.log
+    
+    # Only log if debug mode is enabled
+    if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
+        local log_file="${GEMINI_HOOK_LOG_DIR:-/tmp}/gemini-review-debug.log"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$stage] $message" >>"$log_file"
+    fi
+}
+
+# Check for required commands
+check_required_commands() {
+    local missing_commands=()
+    
+    if ! command -v jq >/dev/null 2>&1; then
+        missing_commands+=("jq")
+    fi
+    
+    if ! command -v gemini >/dev/null 2>&1; then
+        missing_commands+=("gemini")
+    fi
+    
+    if [ ${#missing_commands[@]} -gt 0 ]; then
+        local error_msg="Missing required commands: ${missing_commands[*]}. Please install them before running this script."
+        debug_log "ERROR" "$error_msg" 2>/dev/null || true
+        
+        # Handle JSON escaping manually if jq is not available
+        if command -v jq >/dev/null 2>&1; then
+            local escaped_msg=$(echo "$error_msg" | jq -Rs .)
+        else
+            # Simple escaping for JSON without jq
+            local escaped_msg=\"$(echo "$error_msg" | sed 's/"/\\"/g')\"
+        fi
+        
+        cat <<EOF
+{
+  "decision": "block",
+  "reason": $escaped_msg
+}
+EOF
+        exit 1
+    fi
 }
 
 # Set trap for cleanup on script exit
 trap cleanup EXIT
+
+# Check required commands are available
+check_required_commands
 
 INPUT=$(cat)
 debug_log "START" "Script started, input received"
@@ -83,17 +129,11 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     # Limit CLAUDE_SUMMARY to 1000 characters to avoid token limit
     # Use character-aware truncation instead of byte-based to handle multibyte characters safely
     if [ ${#CLAUDE_SUMMARY} -gt 1000 ]; then
-        # Try to preserve important parts: first 400 chars + last 400 chars
-        # Only if text is longer than 800 chars to avoid overlap
-        if [ ${#CLAUDE_SUMMARY} -gt 800 ]; then
-            FIRST_PART=$(printf "%.400s" "$CLAUDE_SUMMARY")
-            LAST_PART=$(echo "$CLAUDE_SUMMARY" | rev | cut -c1-400 | rev)
-            CLAUDE_SUMMARY="${FIRST_PART}...(中略)...${LAST_PART}"
-        else
-            # For texts between 800-1000 chars, just truncate
-            CLAUDE_SUMMARY=$(printf "%.1000s" "$CLAUDE_SUMMARY")
-            CLAUDE_SUMMARY="${CLAUDE_SUMMARY}...(truncated)"
-        fi
+        # Preserve important parts: first 400 chars + last 400 chars with separator
+        FIRST_PART=$(printf "%.400s" "$CLAUDE_SUMMARY")
+        LAST_PART=$(echo "$CLAUDE_SUMMARY" | rev | cut -c1-400 | rev)
+        CLAUDE_SUMMARY="${FIRST_PART}...(中略)...${LAST_PART}"
+        debug_log "CLAUDE_SUMMARY" "Content truncated to preserve beginning and end (original: ${#CLAUDE_SUMMARY} chars)"
     fi
 fi
 
@@ -122,6 +162,7 @@ if command -v timeout >/dev/null 2>&1; then
     timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
     GEMINI_EXIT_CODE=$?
 else
+    debug_log "GEMINI" "timeout command not available, using manual timeout handling"
     # Manual timeout management
     echo "$REVIEW_PROMPT" | gemini -s -y >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
     GEMINI_PID=$!
@@ -196,6 +237,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
         timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
+        debug_log "FLASH" "timeout command not available, using manual timeout handling"
         echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
         FLASH_PID=$!
 
@@ -245,11 +287,14 @@ EOF
     exit 0
 fi
 
-# For debugging purposes, save outputs to temporary files
-debug_log "OUTPUT" "Saving final outputs to log files"
-echo "$GEMINI_REVIEW" >/tmp/gemini-review-hook.log
-echo "$ERROR_OUTPUT" >/tmp/gemini-review-error.log
-debug_log "OUTPUT" "Final review length: ${#GEMINI_REVIEW} characters"
+# For debugging purposes, save outputs to temporary files (only if debug mode is enabled)
+if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
+    debug_log "OUTPUT" "Saving final outputs to log files"
+    local log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
+    echo "$GEMINI_REVIEW" >"$log_dir/gemini-review-hook.log"
+    echo "$ERROR_OUTPUT" >"$log_dir/gemini-review-error.log"
+    debug_log "OUTPUT" "Final review length: ${#GEMINI_REVIEW} characters"
+fi
 
 # Note: Cleanup is handled by trap on script exit
 
