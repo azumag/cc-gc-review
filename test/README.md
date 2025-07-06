@@ -6,7 +6,7 @@
 
 - **テストフレームワーク**: [Bats (Bash Automated Testing System)](https://github.com/bats-core/bats-core)
 - **テストアプローチ**: TDD (Test-Driven Development) に基づいたテスト設計
-- **対象スクリプト**: `cc-gc-review.sh`, `hook-handler.sh`
+- **対象スクリプト**: `gemini-review-hook.sh`
 
 ## セットアップ
 
@@ -41,21 +41,11 @@ sudo apt-get install bats tmux jq coreutils
 
 ## テストファイル
 
-### `test_cc_gc_review.bats`
+### `test_gemini_review_hook.bats`
 
-`cc-gc-review.sh` の包括的なテストスイート：
+`gemini-review-hook.sh` の包括的なテストスイート：
 
-- コマンドライン引数の処理
-- ヘルプ表示機能
-- tmuxセッション管理
-- ファイル監視機能
-- オプション機能（think mode, custom command, etc.）
-
-### `test_hook_handler.bats`
-
-`hook-handler.sh` の包括的なテストスイート：
-
-- JSON入力の処理
+- 環境変数の処理
 - トランスクリプトファイルの解析
 - Geminiレビューの実行
 - エラーハンドリング
@@ -79,11 +69,8 @@ sudo apt-get install bats tmux jq coreutils
 ### 特定のテストファイル実行
 
 ```bash
-# cc-gc-reviewのテストのみ
-./run_tests.sh --file test_cc_gc_review.bats
-
-# hook-handlerのテストのみ
-./run_tests.sh --file test_hook_handler.bats
+# gemini-review-hookのテストのみ
+./run_tests.sh --file test_gemini_review_hook.bats
 ```
 
 ### 特定のテストケース実行
@@ -98,8 +85,7 @@ sudo apt-get install bats tmux jq coreutils
 
 ```bash
 # 個別ファイル実行
-bats test_cc_gc_review.bats
-bats test_hook_handler.bats
+bats test_gemini_review_hook.bats
 
 # 全テスト実行
 bats test_*.bats
@@ -187,8 +173,8 @@ teardown() {
 
 ```bash
 # Good: 各テストは独立している
-@test "should create new tmux session" {
-    run "$SCRIPT_DIR/cc-gc-review.sh" "$TEST_SESSION"
+@test "should process transcript file" {
+    run "$SCRIPT_DIR/gemini-review-hook.sh"
     [ "$status" -eq 0 ]
 }
 

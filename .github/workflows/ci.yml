@@ -20,19 +20,13 @@ jobs:
     
     - name: Make scripts executable
       run: |
-        chmod +x cc-gc-review.sh
-        chmod +x hook-handler.sh
+        chmod +x gemini-review-hook.sh
         chmod +x test/run_tests.sh
     
-    - name: Run hook-handler tests
+    - name: Run gemini-review-hook tests
       run: |
         cd test
-        ./run_tests.sh -f test_hook_handler.bats
-    
-    - name: Run cc-gc-review tests
-      run: |
-        cd test
-        ./run_tests.sh -f test_cc_gc_review.bats
+        ./run_tests.sh -f test_gemini_review_hook.bats
     
     - name: Run all tests
       run: |
@@ -41,8 +35,7 @@ jobs:
     
     - name: Check script syntax
       run: |
-        bash -n cc-gc-review.sh
-        bash -n hook-handler.sh
+        bash -n gemini-review-hook.sh
         bash -n test/run_tests.sh
     
     - name: Validate test files
@@ -69,8 +62,7 @@ jobs:
     
     - name: Run shellcheck
       run: |
-        shellcheck -S warning cc-gc-review.sh
-        shellcheck -S warning hook-handler.sh
+        shellcheck -S warning gemini-review-hook.sh
         shellcheck -S warning test/run_tests.sh
         shellcheck -S warning test/*.bats
     
@@ -99,8 +91,7 @@ jobs:
     
     - name: Check shell script formatting
       run: |
-        shfmt -d -s -i 4 cc-gc-review.sh
-        shfmt -d -s -i 4 hook-handler.sh
+        shfmt -d -s -i 4 gemini-review-hook.sh
         shfmt -d -s -i 4 test/run_tests.sh
 
   documentation:
@@ -137,8 +128,8 @@ jobs:
         fi
         
         # Check if scripts have proper help text
-        if ! grep -q "show_help" cc-gc-review.sh; then
-          echo "Warning: cc-gc-review.sh missing help function"
+        if ! grep -q "show_help" gemini-review-hook.sh; then
+          echo "Warning: gemini-review-hook.sh missing help function"
         fi
         
         echo "Documentation check completed."
@@ -157,8 +148,7 @@ jobs:
     
     - name: Make scripts executable
       run: |
-        chmod +x cc-gc-review.sh
-        chmod +x hook-handler.sh
+        chmod +x gemini-review-hook.sh
         chmod +x test/run_tests.sh
     
     - name: Integration test - Mock scenario
@@ -180,8 +170,9 @@ jobs:
         # Add to PATH
         export PATH="/tmp/test-integration:$PATH"
         
-        # Test hook-handler with mock data
-        echo '{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}' | ./hook-handler.sh
+        # Test gemini-review-hook with mock data
+        export GEMINI_REVIEW_HOOK_DATA='{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}'
+        ./gemini-review-hook.sh
         
         # Check if review file was created
         if [ -f "/tmp/gemini-review" ]; then
@@ -200,11 +191,12 @@ jobs:
       run: |
         echo "Testing script permissions and basic execution..."
         
-        # Test cc-gc-review.sh help
-        ./cc-gc-review.sh --help || true
+        # Test gemini-review-hook.sh help
+        ./gemini-review-hook.sh --help || true
         
-        # Test hook-handler.sh with invalid input (should handle gracefully)
-        echo '{"invalid": "json"}' | ./hook-handler.sh || true
+        # Test gemini-review-hook.sh with invalid input (should handle gracefully)
+        export GEMINI_REVIEW_HOOK_DATA='{"invalid": "json"}'
+        ./gemini-review-hook.sh || true
         
         echo "✅ Permission and execution tests completed"
 
@@ -254,7 +246,7 @@ jobs:
         
         Download the scripts and make them executable:
         ```bash
-        chmod +x cc-gc-review.sh hook-handler.sh
+        chmod +x gemini-review-hook.sh
         ```
         
         See README.md for detailed usage instructions.
@@ -267,8 +259,7 @@ jobs:
       with:
         name: cc-gc-review-${{ steps.release_info.outputs.version || 'latest' }}
         path: |
-          cc-gc-review.sh
-          hook-handler.sh
+          gemini-review-hook.sh
           README.md
           RELEASE_NOTES.md
         retention-days: 90

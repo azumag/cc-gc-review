@@ -30,11 +30,11 @@ show_usage() {
     echo "  -h, --help          Show this help"
     echo ""
     echo "Examples:"
-    echo "  $0                           # Run all tests"
-    echo "  $0 -f test_hook_handler.bats # Run specific file"
-    echo "  $0 -t 'help.*display'       # Run tests matching pattern"
-    echo "  $0 -v                        # Verbose output"
-    echo "  $0 -p                        # Parallel execution"
+    echo "  $0                                   # Run all tests"
+    echo "  $0 -f test_gemini_review_hook.bats  # Run specific file"
+    echo "  $0 -t 'CLAUDE_SUMMARY.*extraction'  # Run tests matching pattern"
+    echo "  $0 -v                               # Verbose output"
+    echo "  $0 -p                               # Parallel execution"
 }
 
 # デフォルト値

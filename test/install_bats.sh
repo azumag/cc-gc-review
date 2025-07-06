@@ -221,8 +221,7 @@ main() {
         echo "  ./run_tests.sh"
         echo ""
         echo "Or run individual test files:"
-        echo "  bats test_cc_gen_review.bats"
-        echo "  bats test_hook_handler.bats"
+        echo "  bats test_gemini_review_hook.bats"
     else
         echo ""
         echo -e "${RED}=== Installation Failed ===${NC}"
