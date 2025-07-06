@@ -13,6 +13,7 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 - `gemini-review-hook.sh` - Claude Code作業完了時にGeminiでレビューを実行し結果を表示するメインフック
 - `notification.sh` - Claude Code作業完了時にDiscordへ通知メッセージを送信するスクリプト
 - `push-review-complete.sh` - レビュー完了後に未コミット変更を自動的にコミット・プッシュするスクリプト
+- `ci-monitor-hook.sh` - プッシュ後にGitHub Actions CIの状態を監視し、CI失敗時に通知するスクリプト
 - `shared-utils.sh` - トランスクリプト解析などの共通機能を提供するユーティリティライブラリ
 
 **tmux連携機能について**: 以前提供していたtmux連携機能は、設定の複雑さとメンテナンスコストを考慮し、現在は非推奨となっています。シンプルで安定した動作を重視し、Claude Codeの標準的なhook機能のみを使用する現在の方式を推奨します。tmux連携が必要な場合（例：tmuxセッション内でのインタラクティブな操作や、複数セッション間での結果共有が必須の場合）は、[レガシー版のドキュメント](deprecated/README-legacy.md)を参照してください。
@@ -238,9 +239,69 @@ Geminiのレビューで改善点がない場合（`REVIEW_COMPLETED`）に、�
 
 **注意**: このスクリプトは自動的にコミット・プッシュを行うため、意図しない変更が含まれていないか事前に確認することを推奨します。また、`gemini-review-hook.sh` との実行順序に依存関係があるため、hookの設定には注意が必要です。
 
+### ci-monitor-hook.sh - CI監視フック
+
+プッシュ後にGitHub Actions CIの状態を監視し、CI失敗時にユーザーに通知するスクリプトです。このスクリプトは、`REVIEW_COMPLETED && PUSH COMPLETED` のマークが付いた作業のみを対象とし、CIワークフローの完了を自動的に追跡します。
+
+#### 機能
+
+- **自動CI状態監視**: プッシュ後のGitHub Actions CIの実行状態を継続的に監視
+- **CI失敗時の詳細通知**: 失敗したワークフローの詳細（名前、ステータス、URL）を提供
+- **決定ブロック**: CI失敗時に`decision: block`を返し、適切な修正アクションを促す
+- **タイムアウト処理**: 最大5分間の監視後、自動的に終了
+- **エラー処理**: ネットワークエラーや認証エラーに対する適切な処理
+
+#### 必要な環境
+
+- GitHub CLI (gh) - GitHub APIアクセス用
+- git - リポジトリ情報の取得用
+- GitHub認証 - `gh auth login`で認証済みである必要がある
+
+#### フック設定例
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "/path/to/cc-gc-review/hooks/ci-monitor-hook.sh",
+        "timeout": 360
+      }
+    ]
+  }
+}
+```
+
+**注意**: 
+- タイムアウト値は最大監視時間（300秒）より少し長めに設定することを推奨
+- `/path/to/cc-gc-review/hooks/ci-monitor-hook.sh`の部分は、実際のパスに置き換えてください
+
+#### 決定ブロック動作
+
+CI失敗時、以下の形式で詳細情報を提供します：
+
+```
+## CI Check Failed
+
+**Workflow:** テスト名
+**Status:** failure
+**URL:** https://github.com/user/repo/actions/runs/123456
+
+The GitHub Actions CI check has failed. Please review the failure details and fix any issues before continuing.
+
+### Next Steps:
+1. Click the URL above to view the detailed failure logs
+2. Fix the identified issues in your code
+3. Commit and push the fixes
+4. The CI will automatically re-run
+
+Would you like me to help analyze and fix the CI failures?
+```
+
 ### 複数のhookを同時に使用する場合
 
-`gemini-review-hook.sh`と`notification.sh`を両方使用したい場合は、以下のように設定します：
+`gemini-review-hook.sh`、`push-review-complete.sh`、`ci-monitor-hook.sh`、`notification.sh`を組み合わせて使用する場合は、以下のように設定します：
 
 ```json
 {
@@ -261,6 +322,11 @@ Geminiのレビューで改善点がない場合（`REVIEW_COMPLETED`）に、�
           {
             "type": "command",
             "command": "/path/to/cc-gc-review/hooks/push-review-complete.sh"
+          },
+          {
+            "type": "command",
+            "command": "/path/to/cc-gc-review/hooks/ci-monitor-hook.sh",
+            "timeout": 360
           },
           {
             "type": "command",
