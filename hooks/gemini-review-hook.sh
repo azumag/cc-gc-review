@@ -55,11 +55,23 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     debug_log "TRANSCRIPT" "Transcript file found, extracting last messages"
     LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100)
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
-        debug_log "EXIT" "Found REVIEW_COMPLETED, exiting"
+        debug_log "EXIT" "Found REVIEW_COMPLETED, allowing with JSON output"
+        cat <<EOF
+{
+  "decision": "allow",
+  "reason": "Review already completed."
+}
+EOF
         exit 0
     fi
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_RATE_LIMITED"; then
-        debug_log "EXIT" "Found REVIEW_RATE_LIMITED, exiting"
+        debug_log "EXIT" "Found REVIEW_RATE_LIMITED, blocking with JSON output"
+        cat <<EOF
+{
+  "decision": "block", 
+  "reason": "Review was previously rate limited. Please try again later."
+}
+EOF
         exit 0
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
