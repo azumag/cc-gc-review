@@ -190,6 +190,7 @@ jobs:
     - name: Make scripts executable
       run: |
         chmod +x gemini-review-hook.sh
+        chmod +x hook-handler.sh
         chmod +x test/run_tests.sh
     
     - name: Integration test - Mock scenario
@@ -213,14 +214,24 @@ jobs:
         
         # Test gemini-review-hook with mock data
         export GEMINI_REVIEW_HOOK_DATA='{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}'
-        ./gemini-review-hook.sh
+        echo "Testing gemini-review-hook.sh..."
+        HOOK_OUTPUT=$(./gemini-review-hook.sh)
+        echo "Hook output: $HOOK_OUTPUT"
         
-        # Check if review file was created
+        # Verify hook output structure
+        echo "$HOOK_OUTPUT" | jq -e '.decision' > /dev/null || { echo "❌ Invalid JSON output from hook"; exit 1; }
+        echo "$HOOK_OUTPUT" | jq -e '.reason' > /dev/null || { echo "❌ Missing reason in hook output"; exit 1; }
+        
+        # Test hook-handler.sh for file creation
+        echo "Testing hook-handler.sh..."
+        echo '{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}' | ./hook-handler.sh
+        
+        # Check if review file was created by hook-handler
         if [ -f "/tmp/gemini-review" ]; then
-          echo "✅ Integration test passed: Review file created"
+          echo "✅ Integration test passed: Review file created by hook-handler"
           cat /tmp/gemini-review
         else
-          echo "❌ Integration test failed: Review file not created"
+          echo "❌ Integration test failed: Review file not created by hook-handler"
           exit 1
         fi
         

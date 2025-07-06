@@ -261,10 +261,32 @@ ESCAPED_PRINCIPLES=$(echo "$PRINCIPLES" | jq -Rs .)
 # shellcheck disable=SC2034  # TODO: Remove this when ESCAPED_REVIEW is used
 ESCAPED_REVIEW=$(echo "$GEMINI_REVIEW" | jq -Rs .)
 
+# Dynamic decision logic based on review content
+DECISION="block"  # Default to block
 COMBINED_REASON=$(echo -e "$GEMINI_REVIEW\n\n$PRINCIPLES" | jq -Rs .)
+
+# Check if review indicates completion or rate limiting
+if [[ $GEMINI_REVIEW == "REVIEW_COMPLETED" ]]; then
+    debug_log "DECISION" "Review completed successfully, allowing"
+    DECISION="allow"
+    COMBINED_REASON=$(echo "Review completed successfully." | jq -Rs .)
+elif [[ $GEMINI_REVIEW == "REVIEW_RATE_LIMITED" ]]; then
+    debug_log "DECISION" "Rate limited, blocking with specific message"
+    DECISION="block"
+    COMBINED_REASON=$(echo "Review skipped due to rate limiting. Please try again later." | jq -Rs .)
+elif [[ -n $GEMINI_REVIEW ]]; then
+    debug_log "DECISION" "Review content received, blocking for review"
+    DECISION="block"
+    # Keep the combined reason with review and principles
+else
+    debug_log "DECISION" "No review content, allowing to proceed"
+    DECISION="allow"
+    COMBINED_REASON=$(echo "No review feedback available." | jq -Rs .)
+fi
+
 cat <<EOF
 {
-  "decision": "block",
+  "decision": "$DECISION",
   "reason": $COMBINED_REASON
 }
 EOF
