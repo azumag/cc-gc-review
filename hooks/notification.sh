@@ -89,19 +89,7 @@ get_work_summary() {
     local summary=""
     
     if [ -f "$transcript_path" ]; then
-        # Get the last substantial assistant message that's not just tool calls
-        local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
-        
-        # Get the last few substantial messages (avoiding tool-only messages)
-        local substantial_messages=$(jq -r "$jq_filter" "$transcript_path" 2>/dev/null | grep -v "^$" | awk 'length($0) > 50' | tail -3)
-        
-        if [ -n "$substantial_messages" ]; then
-            # Use the most recent substantial message as summary
-            summary=$(echo "$substantial_messages" | tail -1)
-        else
-            # Fallback: try any assistant message
-            summary=$(jq -r "$jq_filter" "$transcript_path" 2>/dev/null | tail -1)
-        fi
+        summary=$(extract_last_assistant_message "$transcript_path" 0 true)
         
         # If still empty, provide a generic fallback
         if [ -z "$summary" ]; then
