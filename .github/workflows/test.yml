@@ -25,16 +25,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y tmux jq coreutils
         
-    - name: Install bats-core
+    - name: Set up BATS testing environment
       run: |
-        git clone https://github.com/bats-core/bats-core.git
-        cd bats-core
-        sudo ./install.sh /usr/local
-        
-    - name: Verify bats installation
-      run: |
-        bats --version
-        which bats
+        chmod +x .github/scripts/setup-bats.sh
+        ./.github/scripts/setup-bats.sh
         
     - name: Make scripts executable
       run: |
@@ -151,15 +145,10 @@ jobs:
       run: |
         brew install tmux jq coreutils
         
-    - name: Install bats-core
+    - name: Set up BATS testing environment
       run: |
-        git clone https://github.com/bats-core/bats-core.git
-        cd bats-core
-        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-          sudo ./install.sh /usr/local
-        else
-          sudo ./install.sh /usr/local
-        fi
+        chmod +x .github/scripts/setup-bats.sh
+        ./.github/scripts/setup-bats.sh
         
     - name: Test script compatibility
       run: |

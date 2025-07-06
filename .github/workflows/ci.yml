@@ -18,20 +18,12 @@ jobs:
     - name: Set up environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y tmux jq bats
-        
-        # Set BATS_LIB_PATH early for CI environment
-        echo "BATS_LIB_PATH=${{ github.workspace }}/test/test_helper/bats-support:${{ github.workspace }}/test/test_helper/bats-assert:${{ github.workspace }}/test/test_helper/bats-file" >> $GITHUB_ENV
+        sudo apt-get install -y tmux jq
     
-    - name: Initialize test helper libraries
+    - name: Set up BATS testing environment
       run: |
-        cd test
-        # Ensure all helper libraries are available
-        if [ ! -d "test_helper/bats-file" ]; then
-          git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
-        fi
-        # Verify all helper libraries exist
-        ls -la test_helper/
+        chmod +x .github/scripts/setup-bats.sh
+        ./.github/scripts/setup-bats.sh
     
     - name: Make scripts executable
       run: |
@@ -176,20 +168,12 @@ jobs:
     - name: Set up environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y tmux jq bats
-        
-        # Set BATS_LIB_PATH early for CI environment
-        echo "BATS_LIB_PATH=${{ github.workspace }}/test/test_helper/bats-support:${{ github.workspace }}/test/test_helper/bats-assert:${{ github.workspace }}/test/test_helper/bats-file" >> $GITHUB_ENV
+        sudo apt-get install -y tmux jq
     
-    - name: Initialize test helper libraries
+    - name: Set up BATS testing environment
       run: |
-        cd test
-        # Ensure all helper libraries are available
-        if [ ! -d "test_helper/bats-file" ]; then
-          git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
-        fi
-        # Verify all helper libraries exist
-        ls -la test_helper/
+        chmod +x .github/scripts/setup-bats.sh
+        ./.github/scripts/setup-bats.sh
     
     - name: Make scripts executable
       run: |
