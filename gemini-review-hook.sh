@@ -2,7 +2,7 @@
 
 # Cleanup function for temporary files
 cleanup() {
-    [ -n "$TEMP_STDOUT" ] && rm -f "$TEMP_STDOUT" 
+    [ -n "$TEMP_STDOUT" ] && rm -f "$TEMP_STDOUT"
     [ -n "$TEMP_STDERR" ] && rm -f "$TEMP_STDERR"
     # Clean up debug log files
     rm -f /tmp/gemini-review-hook.log /tmp/gemini-review-error.log /tmp/gemini-review-debug.log
@@ -11,19 +11,19 @@ cleanup() {
 # Function to extract last assistant message from JSONL transcript
 extract_last_assistant_message() {
     local transcript_path="$1"
-    local line_limit="${2:-0}"  # 0 means no limit
-    
+    local line_limit="${2:-0}" # 0 means no limit
+
     if [ ! -f "$transcript_path" ]; then
         return 1
     fi
-    
+
     local jq_input
     if [ "$line_limit" -gt 0 ]; then
         jq_input=$(tail -n "$line_limit" "$transcript_path")
     else
         jq_input=$(cat "$transcript_path")
     fi
-    
+
     echo "$jq_input" | jq -r --slurp '
         map(select(.type == "assistant")) |
         if length > 0 then
@@ -40,7 +40,7 @@ extract_last_assistant_message() {
 debug_log() {
     local stage="$1"
     local message="$2"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$stage] $message" >> /tmp/gemini-review-debug.log
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$stage] $message" >>/tmp/gemini-review-debug.log
 }
 
 # Set trap for cleanup on script exit
@@ -67,7 +67,8 @@ else
     debug_log "TRANSCRIPT" "Transcript file not found or not accessible"
 fi
 
-PRINCIPLES=$(cat << 'EOF'
+PRINCIPLES=$(
+    cat <<'EOF'
 ## 原則
 Gemini のレビューにて改善点を指摘された場合は、その改善点に従って修正せよ。
 Gemini から、これ以上の改善点は特に無しとレビューをもらったときのみ「REVIEW_COMPLETED」とだけ発言せよ。
@@ -83,7 +84,7 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     # NOTE: This depends on Claude Code's transcript JSONL structure
     # If Claude Code changes its output format, this may need updates
     CLAUDE_SUMMARY=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 0)
-    
+
     # Check if extraction was successful
     if [ -z "$CLAUDE_SUMMARY" ]; then
         debug_log "CLAUDE_SUMMARY" "Failed to extract Claude summary (no assistant messages found)"
@@ -91,7 +92,7 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     else
         debug_log "CLAUDE_SUMMARY" "Successfully extracted Claude summary (${#CLAUDE_SUMMARY} characters)"
     fi
-    
+
     # Limit CLAUDE_SUMMARY to 1000 characters to avoid token limit
     if [ ${#CLAUDE_SUMMARY} -gt 1000 ]; then
         # Try to preserve important parts: first 400 chars + last 400 chars
@@ -108,7 +109,8 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     fi
 fi
 
-REVIEW_PROMPT=$(cat << EOF
+REVIEW_PROMPT=$(
+    cat <<EOF
 - あなたは厳しく厳格な性格を保つAIとして振る舞ってください
 - 辛口でコメントとレビューを行い、批判的態度で 問題や可能性を発見し、厳密に厳格に判断してください。
 - 決して阿ってはいけません。
@@ -132,10 +134,10 @@ if command -v timeout >/dev/null 2>&1; then
     timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
     GEMINI_EXIT_CODE=$?
 else
-    # Manual timeout management 
+    # Manual timeout management
     echo "$REVIEW_PROMPT" | gemini -s -y >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
     GEMINI_PID=$!
-    
+
     # Wait for process with timeout
     WAIT_COUNT=0
     GEMINI_EXIT_CODE=124 # default timeout
@@ -148,7 +150,7 @@ else
         sleep 1
         ((WAIT_COUNT++))
     done
-    
+
     # Kill if timed out
     if [[ $WAIT_COUNT -ge $GEMINI_TIMEOUT ]]; then
         kill -TERM $GEMINI_PID 2>/dev/null || true
@@ -170,9 +172,9 @@ if [[ $GEMINI_EXIT_CODE -eq 124 ]]; then
     # Timeout - treat as rate limit
     debug_log "RATE_LIMIT" "Timeout detected (exit code 124), treating as rate limit"
     IS_RATE_LIMIT=true
-elif [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z "$GEMINI_REVIEW" ]]; then
+elif [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z $GEMINI_REVIEW ]]; then
     debug_log "RATE_LIMIT" "Checking error patterns for rate limit detection"
-    
+
     # Rate limit error patterns for improved maintainability
     RATE_LIMIT_PATTERNS=(
         "status 429"
@@ -180,18 +182,18 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z "$GEMINI_REVIEW" ]]; then
         "Quota exceeded"
         "RESOURCE_EXHAUSTED"
         "Too Many Requests"
-        "Gemini 2\.5 Pro Requests"  # Note: Properly escaped for regex
+        "Gemini 2\.5 Pro Requests" # Note: Properly escaped for regex
     )
-    
+
     # Check each pattern
     for pattern in "${RATE_LIMIT_PATTERNS[@]}"; do
-        if [[ "$ERROR_OUTPUT" =~ $pattern ]]; then
+        if [[ $ERROR_OUTPUT =~ $pattern ]]; then
             debug_log "RATE_LIMIT" "Rate limit pattern detected: $pattern"
             IS_RATE_LIMIT=true
             break
         fi
     done
-    
+
     if [[ $IS_RATE_LIMIT != "true" ]]; then
         debug_log "ERROR" "Non-rate-limit error detected: exit code $GEMINI_EXIT_CODE"
     fi
@@ -201,14 +203,14 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
     # Rate limited - try Flash model
     debug_log "FLASH" "Rate limit detected, switching to Flash model"
     >&2 echo "[gemini-review-hook] Rate limit detected, switching to Flash model..."
-    
+
     if command -v timeout >/dev/null 2>&1; then
         timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
         FLASH_PID=$!
-        
+
         WAIT_COUNT=0
         GEMINI_EXIT_CODE=124
         while [[ $WAIT_COUNT -lt $GEMINI_TIMEOUT ]]; do
@@ -220,7 +222,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
             sleep 1
             ((WAIT_COUNT++))
         done
-        
+
         if [[ $WAIT_COUNT -ge $GEMINI_TIMEOUT ]]; then
             kill -TERM $FLASH_PID 2>/dev/null || true
             sleep 2
@@ -229,10 +231,10 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
             GEMINI_EXIT_CODE=124
         fi
     fi
-    
+
     GEMINI_REVIEW=$(cat "$TEMP_STDOUT" 2>/dev/null)
     debug_log "FLASH" "Flash model execution completed with exit code: $GEMINI_EXIT_CODE"
-    if [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z "$GEMINI_REVIEW" ]]; then
+    if [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z $GEMINI_REVIEW ]]; then
         debug_log "FLASH" "Flash model also failed, setting REVIEW_RATE_LIMITED"
         GEMINI_REVIEW="REVIEW_RATE_LIMITED"
     else
@@ -244,11 +246,10 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
     exit 0
 fi
 
-
 # For debugging purposes, save outputs to temporary files
 debug_log "OUTPUT" "Saving final outputs to log files"
-echo "$GEMINI_REVIEW" > /tmp/gemini-review-hook.log
-echo "$ERROR_OUTPUT" > /tmp/gemini-review-error.log
+echo "$GEMINI_REVIEW" >/tmp/gemini-review-hook.log
+echo "$ERROR_OUTPUT" >/tmp/gemini-review-error.log
 debug_log "OUTPUT" "Final review length: ${#GEMINI_REVIEW} characters"
 
 # Note: Cleanup is handled by trap on script exit
@@ -261,7 +262,7 @@ ESCAPED_PRINCIPLES=$(echo "$PRINCIPLES" | jq -Rs .)
 ESCAPED_REVIEW=$(echo "$GEMINI_REVIEW" | jq -Rs .)
 
 COMBINED_REASON=$(echo -e "$GEMINI_REVIEW\n\n$PRINCIPLES" | jq -Rs .)
-cat << EOF
+cat <<EOF
 {
   "decision": "block",
   "reason": $COMBINED_REASON
