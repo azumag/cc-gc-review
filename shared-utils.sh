@@ -13,7 +13,7 @@ extract_last_assistant_message() {
         return 1
     fi
 
-    local jq_filter='.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text'
+    local jq_filter='select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text'
     local result
     
     if [ "$line_limit" -gt 0 ]; then
