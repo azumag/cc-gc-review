@@ -24,8 +24,8 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 1. **リポジトリの更新**
    ```bash
    git pull origin main
-   git add hooks/
    git rm gemini-review-hook.sh notification.sh push-review-complete.sh shared-utils.sh
+   git add hooks/
    git commit -m "migrate: Move scripts to hooks directory and update documentation"
    ```
 
@@ -82,7 +82,7 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 }
 ```
 
-**注意**: `/path/to/cc-gc-review/hooks/gemini-review-hook.sh` の部分は、実際にクローンしたリポジトリの `hooks` ディレクトリへの絶対パスに置き換えてください。例：`/Users/username/cc-gc-review/hooks/gemini-review-hook.sh`
+**注意**: `/path/to/cc-gc-review/hooks/gemini-review-hook.sh` の部分は、`cc-gc-review` リポジトリのルートディレクトリへの絶対パスに `hooks/gemini-review-hook.sh` を追加したパスに置き換えてください。例：`/Users/username/cc-gc-review/hooks/gemini-review-hook.sh`
 
 ### 2. 必要な環境
 
@@ -175,7 +175,7 @@ sudo apt-get install libnotify-bin
    ```
    
    **注意**: 
-   - `/path/to/cc-gc-review/hooks/notification.sh`の部分は、実際にクローンしたリポジトリの `hooks` ディレクトリへの絶対パスに置き換えてください。例：`/Users/username/cc-gc-review/hooks/notification.sh`
+   - `/path/to/cc-gc-review/hooks/notification.sh`の部分は、`cc-gc-review` リポジトリのルートディレクトリへの絶対パスに `hooks/notification.sh` を追加したパスに置き換えてください。例：`/Users/username/cc-gc-review/hooks/notification.sh`
    - `matcher`は条件マッチング用（空文字列は全ての場合にマッチ）
 
 2. プロジェクトのルートディレクトリに`.env`ファイルを作成
@@ -200,7 +200,7 @@ sudo apt-get install libnotify-bin
 - `CLAUDE_TRANSCRIPT_PATH`は自動的に設定され、`notification.sh`がClaudeの作業トランスクリプトからサマリーを抽出します
 - 手動実行する場合：
   ```bash
-  ./hooks/notification.sh [branch_name]
+  /absolute/path/to/cc-gc-review/hooks/notification.sh [branch_name]
   ```
 
 #### 通知内容
