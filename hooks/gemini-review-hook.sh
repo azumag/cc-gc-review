@@ -81,16 +81,17 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     fi
 
     # Limit CLAUDE_SUMMARY to 1000 characters to avoid token limit
+    # Use character-aware truncation instead of byte-based to handle multibyte characters safely
     if [ ${#CLAUDE_SUMMARY} -gt 1000 ]; then
         # Try to preserve important parts: first 400 chars + last 400 chars
         # Only if text is longer than 800 chars to avoid overlap
         if [ ${#CLAUDE_SUMMARY} -gt 800 ]; then
-            FIRST_PART=$(echo "$CLAUDE_SUMMARY" | head -c 400)
-            LAST_PART=$(echo "$CLAUDE_SUMMARY" | tail -c 400)
+            FIRST_PART=$(printf "%.400s" "$CLAUDE_SUMMARY")
+            LAST_PART=$(echo "$CLAUDE_SUMMARY" | rev | cut -c1-400 | rev)
             CLAUDE_SUMMARY="${FIRST_PART}...(中略)...${LAST_PART}"
         else
             # For texts between 800-1000 chars, just truncate
-            CLAUDE_SUMMARY=$(echo "$CLAUDE_SUMMARY" | head -c 1000)
+            CLAUDE_SUMMARY=$(printf "%.1000s" "$CLAUDE_SUMMARY")
             CLAUDE_SUMMARY="${CLAUDE_SUMMARY}...(truncated)"
         fi
     fi
@@ -228,8 +229,19 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
         debug_log "FLASH" "Flash model succeeded, review length: ${#GEMINI_REVIEW} characters"
     fi
 elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
-    # Other error
-    debug_log "ERROR" "Non-rate-limit error occurred, exiting gracefully"
+    # Other error - provide error details to user
+    debug_log "ERROR" "Non-rate-limit error occurred: exit code $GEMINI_EXIT_CODE"
+    ERROR_REASON="Gemini execution failed with exit code $GEMINI_EXIT_CODE"
+    if [ -n "$ERROR_OUTPUT" ]; then
+        ERROR_REASON="$ERROR_REASON. Error: $ERROR_OUTPUT"
+    fi
+    
+    cat <<EOF
+{
+  "decision": "block",
+  "reason": $(echo "$ERROR_REASON" | jq -Rs .)
+}
+EOF
     exit 0
 fi
 
@@ -241,16 +253,8 @@ debug_log "OUTPUT" "Final review length: ${#GEMINI_REVIEW} characters"
 
 # Note: Cleanup is handled by trap on script exit
 
-# TODO: These variables are prepared for potential future use in separate JSON formatting
-# If you implement functionality that uses these variables, remove the shellcheck disable comments below
-# shellcheck disable=SC2034  # TODO: Remove this when ESCAPED_PRINCIPLES is used
-ESCAPED_PRINCIPLES=$(echo "$PRINCIPLES" | jq -Rs .)
-# shellcheck disable=SC2034  # TODO: Remove this when ESCAPED_REVIEW is used
-ESCAPED_REVIEW=$(echo "$GEMINI_REVIEW" | jq -Rs .)
-
 # Dynamic decision logic based on review content
 DECISION="block" # Default to block
-COMBINED_REASON=$(echo -e "$GEMINI_REVIEW\n\n$PRINCIPLES" | jq -Rs .)
 
 # Check if review indicates completion or rate limiting
 if [[ $GEMINI_REVIEW == "REVIEW_COMPLETED" ]]; then
@@ -264,7 +268,9 @@ elif [[ $GEMINI_REVIEW == "REVIEW_RATE_LIMITED" ]]; then
 elif [[ -n $GEMINI_REVIEW ]]; then
     debug_log "DECISION" "Review content received, blocking for review"
     DECISION="block"
-    # Keep the combined reason with review and principles
+    # Safely combine review and principles, handling potential JSON content in GEMINI_REVIEW
+    COMBINED_CONTENT=$(printf "%s\n\n%s" "$GEMINI_REVIEW" "$PRINCIPLES")
+    COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
 else
     debug_log "DECISION" "No review content, allowing to proceed"
     DECISION="allow"
