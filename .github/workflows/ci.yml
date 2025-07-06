@@ -286,23 +286,7 @@ jobs:
       env:
         DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
       run: |
-        # Collect failed jobs information
-        FAILED_JOBS=""
-        if [[ "${{ needs.test.result }}" == "failure" ]]; then
-          FAILED_JOBS="${FAILED_JOBS}• Test Suite\n"
-        fi
-        if [[ "${{ needs.lint.result }}" == "failure" ]]; then
-          FAILED_JOBS="${FAILED_JOBS}• Linting\n"
-        fi
-        if [[ "${{ needs.format.result }}" == "failure" ]]; then
-          FAILED_JOBS="${FAILED_JOBS}• Formatting\n"
-        fi
-        if [[ "${{ needs.integration.result }}" == "failure" ]]; then
-          FAILED_JOBS="${FAILED_JOBS}• Integration Tests\n"
-        fi
-        if [[ "${{ needs.release.result }}" == "failure" ]]; then
-          FAILED_JOBS="${FAILED_JOBS}• Release Process\n"
-        fi
+        
 
         # Determine branch name
         BRANCH_NAME="${{ github.ref_name }}"
@@ -314,7 +298,11 @@ jobs:
         chmod +x scripts/send_discord_notification.sh
         ./scripts/send_discord_notification.sh \
           "$DISCORD_WEBHOOK" \
-          "$FAILED_JOBS" \
+          "${{ needs.test.result }}" \
+          "${{ needs.lint.result }}" \
+          "${{ needs.format.result }}" \
+          "${{ needs.integration.result }}" \
+          "${{ needs.release.result }}" \
           "$BRANCH_NAME" \
           "${{ github.sha }}" \
           "${{ github.actor }}" \

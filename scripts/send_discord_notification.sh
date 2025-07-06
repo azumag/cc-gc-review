@@ -1,29 +1,51 @@
 #!/bin/bash
 
 # Discord notification script for CI failures
-# Usage: ./send_discord_notification.sh [webhook_url] [failed_jobs] [branch] [sha] [actor] [commit_message] [run_url]
+# Usage: ./send_discord_notification.sh [webhook_url] [test_result] [lint_result] [format_result] [integration_result] [release_result] [branch] [sha] [actor] [commit_message] [run_url]
 
 set -euo pipefail
 
 # Check if all required arguments are provided
-if [ $# -ne 7 ]; then
+if [ $# -ne 11 ]; then
     echo "Error: Missing required arguments"
-    echo "Usage: $0 [webhook_url] [failed_jobs] [branch] [sha] [actor] [commit_message] [run_url]"
+    echo "Usage: $0 [webhook_url] [test_result] [lint_result] [format_result] [integration_result] [release_result] [branch] [sha] [actor] [commit_message] [run_url]"
     exit 1
 fi
 
 WEBHOOK_URL="$1"
-FAILED_JOBS="$2"
-BRANCH="$3"
-SHA="$4"
-ACTOR="$5"
-COMMIT_MESSAGE="$6"
-RUN_URL="$7"
+TEST_RESULT="$2"
+LINT_RESULT="$3"
+FORMAT_RESULT="$4"
+INTEGRATION_RESULT="$5"
+RELEASE_RESULT="$6"
+BRANCH="$7"
+SHA="$8"
+ACTOR="$9"
+COMMIT_MESSAGE="${10}"
+RUN_URL="${11}"
 
 # Validate webhook URL
 if [[ ! "$WEBHOOK_URL" =~ ^https://discord(app)?\.com/api/webhooks/ ]]; then
     echo "Error: Invalid Discord webhook URL"
     exit 1
+fi
+
+# Collect failed jobs information
+FAILED_JOBS=""
+if [[ "$TEST_RESULT" == "failure" ]]; then
+  FAILED_JOBS="${FAILED_JOBS}• Test Suite\n"
+fi
+if [[ "$LINT_RESULT" == "failure" ]]; then
+  FAILED_JOBS="${FAILED_JOBS}• Linting\n"
+fi
+if [[ "$FORMAT_RESULT" == "failure" ]]; then
+  FAILED_JOBS="${FAILED_JOBS}• Formatting\n"
+fi
+if [[ "$INTEGRATION_RESULT" == "failure" ]]; then
+  FAILED_JOBS="${FAILED_JOBS}• Integration Tests\n"
+fi
+if [[ "$RELEASE_RESULT" == "failure" ]]; then
+  FAILED_JOBS="${FAILED_JOBS}• Release Process\n"
 fi
 
 # Create JSON payload with proper escaping
@@ -39,27 +61,27 @@ create_discord_payload() {
       "fields": [
         {
           "name": "Failed Jobs",
-          "value": "${FAILED_JOBS}",
+          "value": "$(echo "${FAILED_JOBS}" | jq -R -s '.')",
           "inline": true
         },
         {
           "name": "Branch",
-          "value": "${BRANCH}",
+          "value": "$(echo "${BRANCH}" | jq -R -s '.')",
           "inline": true
         },
         {
           "name": "Commit",
-          "value": "\`${SHA:0:7}\`",
+          "value": "`$(echo "${SHA:0:7}" | jq -R -s '.')`",
           "inline": true
         },
         {
           "name": "Author",
-          "value": "${ACTOR}",
+          "value": "$(echo "${ACTOR}" | jq -R -s '.')",
           "inline": true
         },
         {
           "name": "Commit Message",
-          "value": "${COMMIT_MESSAGE}",
+          "value": "$(echo "${COMMIT_MESSAGE}" | jq -R -s '.')",
           "inline": false
         }
       ],
