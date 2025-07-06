@@ -40,8 +40,29 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 ### 2. 必要な環境
 
 - Bash
-- jq
-- gemini-cli
+- jq (必須)
+- gemini-cli (必須)
+- terminal-notifier (macOS通知用、オプション)
+- libnotify-bin (Ubuntu通知用、オプション)
+
+#### 必須ツールのインストール方法
+
+```bash
+# jqのインストール
+# macOSの場合
+brew install jq
+# Ubuntuの場合
+sudo apt-get install jq
+```
+
+#### オプションツールのインストール方法 (通知機能を利用する場合)
+
+```bash
+# macOSの場合
+brew install terminal-notifier
+# Ubuntuの場合
+sudo apt-get install libnotify-bin
+```
 
 ## 機能
 
@@ -111,6 +132,44 @@ chmod +x gemini-review-hook.sh
 2. Claude Codeで通常通り作業を行う
 3. 作業が完了すると自動的にGeminiがレビューを実行
 4. レビュー結果がClaude Codeに直接表示される
+
+### Discord通知の設定
+
+Discord通知を有効にする場合：
+
+1. プロジェクトのルートディレクトリに`.env`ファイルを作成
+   ```bash
+   cp .env.example .env
+   ```
+   
+   **`.env.example`について**: このファイルは設定のテンプレートとして提供されています。必要な環境変数とその説明がコメントとして記載されており、実際の値を入力する際のガイドとして利用できます。
+   
+2. Discord WebhookのURLを設定：
+   ```
+   DISCORD_CLAUDE_NOTIFICATION_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_URL
+   ```
+   
+   **⚠️ セキュリティ警告**: `.env`ファイルは機密情報を含むため、Gitにコミットしないでください。このファイルは既に`.gitignore`に追加されています。
+
+3. 作業サマリーの自動抽出について：
+   - `CLAUDE_TRANSCRIPT_PATH`環境変数はClaude Codeのhook環境によって自動的に設定されます。
+   - ユーザーが手動で設定する必要はありません。
+   - `notification.sh`スクリプトは、このパスからClaudeの作業トランスクリプトを読み込み、作業サマリーを抽出するために利用します。
+
+4. 通知のトリガー：
+   - `notification.sh`スクリプトは、`gemini-review-hook.sh`から自動的に呼び出されます。
+   - したがって、通常はユーザーが手動で実行する必要はありません。
+   - ただし、テスト目的などで手動で実行する場合は、以下のようにします。
+     ```bash
+     ./notification.sh [branch_name]
+     ```
+
+通知には以下の情報が含まれます：
+- リポジトリ名
+- ブランチ名
+- 作業サマリー（Claude Codeのトランスクリプトから自動抽出）
+- デスクトップ通知（macOS: terminal-notifier、Ubuntu: notify-send）
+
 
 ### 詳細ログの有効化
 
