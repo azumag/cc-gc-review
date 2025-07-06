@@ -89,18 +89,16 @@ get_work_summary() {
     local summary=""
     
     if [ -f "$transcript_path" ]; then
-        # Get the complete last assistant message (full content)
-        summary=$(extract_last_assistant_message "$transcript_path" 0)
+        # Get recent assistant messages to build comprehensive summary
+        local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
+        local recent_messages=$(tail -n 100 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 5)
         
-        # If summary is very short, try to get more context from recent messages
-        if [ ${#summary} -lt 100 ]; then
-            local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
-            local recent_messages=$(tail -n 50 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 3)
-            
-            if [ -n "$recent_messages" ]; then
-                # Combine all recent messages for comprehensive summary
-                summary=$(echo "$recent_messages" | grep -v "^$")
-            fi
+        if [ -n "$recent_messages" ]; then
+            # Join all recent messages with newlines for complete context
+            summary=$(echo "$recent_messages" | grep -v "^$" | tr '\n' '\n\n')
+        else
+            # Fallback to single last message
+            summary=$(extract_last_assistant_message "$transcript_path" 0)
         fi
     fi
     
