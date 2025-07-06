@@ -629,56 +629,82 @@ run_tests() {
                     fi
                 done
 
-                # Report failures for legacy arrays
+                # Group failures by category for legacy arrays
+                declare -a unique_categories
                 for test_file in "${failed_test_files[@]}"; do
-                    log_error "\nFailed Test: $test_file"
-                    
-                    local stdout_content
-                    local stderr_content
                     local category
-                    stdout_content=$(get_test_stdout "$test_file")
-                    stderr_content=$(get_test_stderr "$test_file")
                     category=$(get_test_category "$test_file")
-
-                    log_info "Category: $category"
-
-                    # Analyze stderr first (usually contains error information)
-                    if [ -n "$stderr_content" ]; then
-                        log_warning "Error Output (stderr, last $max_error_lines lines):"
-                        echo "$stderr_content" | tail -n "$max_error_lines" | sed 's/^/  🔥 /'
-
-                        # Look for critical patterns first
-                        local critical_lines
-                        if critical_lines=$(echo "$stderr_content" | grep -E "($critical_patterns)" | head -"$max_error_indicators"); then
-                            log_error "Critical Issues:"
-                            echo "$critical_lines" | sed 's/^/  💥 /'
-                        fi
-
-                        # Look for error patterns
-                        local error_lines
-                        if error_lines=$(echo "$stderr_content" | grep -E "($error_patterns)" | head -"$max_error_indicators"); then
-                            log_warning "Error Indicators:"
-                            echo "$error_lines" | sed 's/^/  🔍 /'
-                        fi
+                    
+                    # Check if category already exists
+                    local category_exists=false
+                    if [ ${#unique_categories[@]} -gt 0 ]; then
+                        for existing_category in "${unique_categories[@]}"; do
+                            if [ "$existing_category" = "$category" ]; then
+                                category_exists=true
+                                break
+                            fi
+                        done
                     fi
-
-                    # Analyze stdout for test case failures
-                    if [ -n "$stdout_content" ]; then
-                        local failed_cases
-                        if failed_cases=$(echo "$stdout_content" | grep -E "($error_patterns)" | head -"$max_failed_cases"); then
-                            log_warning "Failed Test Cases:"
-                            echo "$failed_cases" | sed 's/^/  📋 /'
-                        fi
-
-                        # Show warnings if any
-                        local warning_lines
-                        if warning_lines=$(echo "$stdout_content" | grep -E "($warning_patterns)" | head -3); then
-                            log_warning "Warnings:"
-                            echo "$warning_lines" | sed 's/^/  ⚠️  /'
-                        fi
+                    
+                    if [ "$category_exists" = false ]; then
+                        unique_categories+=("$category")
                     fi
+                done
 
-                    log_info "$(printf '%.0s-' {1..50})"
+                # Report failures by category for legacy arrays
+                for category in "${unique_categories[@]}"; do
+                    log_header "\n$category Test Failures"
+                    for test_file in "${failed_test_files[@]}"; do
+                        local test_category
+                        test_category=$(get_test_category "$test_file")
+                        
+                        if [ "$test_category" = "$category" ]; then
+                            log_error "\nFailed Test: $test_file"
+                            
+                            local stdout_content
+                            local stderr_content
+                            stdout_content=$(get_test_stdout "$test_file")
+                            stderr_content=$(get_test_stderr "$test_file")
+                            
+                            # Analyze stderr first (usually contains error information)
+                            if [ -n "$stderr_content" ]; then
+                                log_warning "Error Output (stderr, last $max_error_lines lines):"
+                                echo "$stderr_content" | tail -n "$max_error_lines" | sed 's/^/  🔥 /'
+
+                                # Look for critical patterns first
+                                local critical_lines
+                                if critical_lines=$(echo "$stderr_content" | grep -E "($critical_patterns)" | head -"$max_error_indicators"); then
+                                    log_error "Critical Issues:"
+                                    echo "$critical_lines" | sed 's/^/  💥 /'
+                                fi
+
+                                # Look for error patterns
+                                local error_lines
+                                if error_lines=$(echo "$stderr_content" | grep -E "($error_patterns)" | head -"$max_error_indicators"); then
+                                    log_warning "Error Indicators:"
+                                    echo "$error_lines" | sed 's/^/  🔍 /'
+                                fi
+                            fi
+
+                            # Analyze stdout for test case failures
+                            if [ -n "$stdout_content" ]; then
+                                local failed_cases
+                                if failed_cases=$(echo "$stdout_content" | grep -E "($error_patterns)" | head -"$max_failed_cases"); then
+                                    log_warning "Failed Test Cases:"
+                                    echo "$failed_cases" | sed 's/^/  📋 /'
+                                fi
+
+                                # Show warnings if any
+                                local warning_lines
+                                if warning_lines=$(echo "$stdout_content" | grep -E "($warning_patterns)" | head -3); then
+                                    log_warning "Warnings:"
+                                    echo "$warning_lines" | sed 's/^/  ⚠️  /'
+                                fi
+                            fi
+
+                            log_info "$(printf '%.0s-' {1..50})"
+                        fi
+                    done
                 done
             fi
 

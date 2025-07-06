@@ -55,6 +55,7 @@ EOF
     cat > "$TEMP_TEST_DIR/mock_failing_test.sh" << 'EOF'
 #!/bin/bash
 echo "Mock test output" >&1
+echo "Failed: Mock assertion failed" >&1
 echo "Error: Mock test failed" >&2
 echo "FAIL: Mock assertion failed" >&2
 exit 1
