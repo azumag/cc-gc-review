@@ -12,7 +12,7 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy the hook
-cp /Users/azumag/work/cc-gc-review/hooks/gemini-review-hook.sh .
+cp ../hooks/gemini-review-hook.sh .
 
 # Create a mock gemini command that simulates real behavior
 cat > gemini << 'EOF'

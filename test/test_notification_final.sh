@@ -10,8 +10,8 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy and modify notification files
-cp /Users/azumag/work/cc-gc-review/hooks/shared-utils.sh .
-cp /Users/azumag/work/cc-gc-review/hooks/notification.sh .
+cp ../hooks/shared-utils.sh .
+cp ../hooks/notification.sh .
 
 # Fix the source path in notification.sh
 sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|' notification.sh

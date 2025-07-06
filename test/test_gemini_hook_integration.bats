@@ -12,7 +12,7 @@ setup() {
     cd "$TEST_DIR"
     
     # Copy the gemini-review-hook.sh for testing
-    cp /Users/azumag/work/cc-gc-review/hooks/gemini-review-hook.sh .
+    cp ../hooks/gemini-review-hook.sh .
     
     # Make gemini command available (mock)
     export PATH="$TEST_DIR:$PATH"

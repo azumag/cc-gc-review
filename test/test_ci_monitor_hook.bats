@@ -12,8 +12,8 @@ setup() {
     cd "$TEST_DIR"
     
     # Copy the ci-monitor-hook.sh for testing
-    cp /Users/azumag/work/cc-gc-review/hooks/ci-monitor-hook.sh .
-    cp /Users/azumag/work/cc-gc-review/hooks/shared-utils.sh .
+    cp ../hooks/ci-monitor-hook.sh .
+    cp ../hooks/shared-utils.sh .
     
     # Make gh command available (mock)
     export PATH="$TEST_DIR:$PATH"
@@ -79,11 +79,11 @@ teardown() {
     rm -rf "$TEST_DIR"
 }
 
-@test "ci-monitor-hook detects REVIEW_COMPLETED && PUSH COMPLETED message" {
+@test "ci-monitor-hook detects REVIEW_COMPLETED && PUSH_COMPLETED message" {
     # Create transcript with matching message
     cat > matching_transcript.jsonl << 'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Please push the changes to the repository."}]}}
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I'll push the changes now.\n\nREVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I'll push the changes now.\n\nREVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Set up successful CI response
@@ -119,7 +119,7 @@ EOF
 @test "ci-monitor-hook handles CI failure" {
     # Create transcript with matching message
     cat > failure_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Set up failed CI response
@@ -140,7 +140,7 @@ EOF
 @test "ci-monitor-hook handles timeout behavior" {
     # Create transcript with matching message
     cat > timeout_test_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Set up perpetually in-progress CI response
@@ -162,7 +162,7 @@ EOF
 @test "ci-monitor-hook handles missing gh CLI" {
     # Create transcript with matching message
     cat > missing_gh_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Remove gh from PATH
@@ -192,7 +192,7 @@ EOF
 @test "ci-monitor-hook handles CI cancelled" {
     # Create transcript with matching message
     cat > cancelled_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Set up cancelled CI response
@@ -215,7 +215,7 @@ EOF
 @test "ci-monitor-hook handles CI timeout" {
     # Create transcript with matching message
     cat > timeout_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Set up timed out CI response
@@ -238,7 +238,7 @@ EOF
 @test "ci-monitor-hook formats decision block correctly" {
     # Create transcript with matching message
     cat > format_test_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Set up failed CI response with specific details
@@ -281,7 +281,7 @@ EOF
 @test "ci-monitor-hook handles unauthenticated gh CLI" {
     # Create transcript with matching message
     cat > unauth_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Create gh mock that fails auth
@@ -311,7 +311,7 @@ EOF
 @test "ci-monitor-hook handles non-git repository" {
     # Create transcript with matching message
     cat > non_git_transcript.jsonl << 'EOF'
-{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH COMPLETED"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
     # Create git mock that fails git-dir check

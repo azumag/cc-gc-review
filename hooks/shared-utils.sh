@@ -14,7 +14,7 @@ extract_last_assistant_message() {
         return 1
     fi
 
-    local result
+    local result=""
 
     if [ "$line_limit" -gt 0 ]; then
         # Get from last N lines, but restrict to the last assistant message with text content

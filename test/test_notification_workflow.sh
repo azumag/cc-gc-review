@@ -10,8 +10,8 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy required files from the project
-cp /Users/azumag/work/cc-gc-review/hooks/notification.sh .
-cp /Users/azumag/work/cc-gc-review/hooks/shared-utils.sh .
+cp ../hooks/notification.sh .
+cp ../hooks/shared-utils.sh .
 
 # Create a test transcript with realistic content
 cat > test_transcript.jsonl << 'EOF'

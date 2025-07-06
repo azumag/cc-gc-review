@@ -25,7 +25,7 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should extract last meaningful line from summary" {
-    source "/Users/azumag/work/cc-gc-review/hooks/notification.sh"
+    source "../hooks/notification.sh"
     
     local summary="Work Summary: Multiple tasks completed
     
@@ -40,7 +40,7 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle numbered lists" {
-    source "/Users/azumag/work/cc-gc-review/hooks/notification.sh"
+    source "../hooks/notification.sh"
     
     local summary="1. Initialize the project
     2. Configure the settings
@@ -52,7 +52,7 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle different from full summary" {
-    source "/Users/azumag/work/cc-gc-review/hooks/notification.sh"
+    source "../hooks/notification.sh"
     
     local summary="Work Summary: Fixed Discord notification issues
 

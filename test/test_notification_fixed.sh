@@ -17,7 +17,7 @@ EOF
 
 echo "1. Testing extract_last_assistant_message function..."
 # Source the shared-utils.sh from the hooks directory
-source /Users/azumag/work/cc-gc-review/hooks/shared-utils.sh
+source ../hooks/shared-utils.sh
 
 # Test the extract function
 extracted_content=$(extract_last_assistant_message "test_transcript.jsonl")
@@ -27,7 +27,7 @@ echo "${extracted_content:0:200}..."
 
 echo -e "\n2. Testing get_work_summary function..."
 # Source notification.sh which contains get_work_summary
-source /Users/azumag/work/cc-gc-review/hooks/notification.sh
+source ../hooks/notification.sh
 
 work_summary=$(get_work_summary "test_transcript.jsonl")
 echo "✓ Work summary generated:"
