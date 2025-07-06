@@ -3,39 +3,8 @@
 
 set -euo pipefail
 
-# Function to extract last assistant message from JSONL transcript
-extract_last_assistant_message() {
-    local transcript_path="$1"
-    local line_limit="${2:-0}" # 0 means no limit
-
-    if [ ! -f "$transcript_path" ]; then
-        return 1
-    fi
-
-    local jq_input
-    if [ "$line_limit" -gt 0 ]; then
-        jq_input=$(tail -n "$line_limit" "$transcript_path")
-    else
-        jq_input=$(cat "$transcript_path")
-    fi
-
-    local result
-    if ! result=$(echo "$jq_input" | jq -r --slurp '
-        map(select(.type == "assistant")) |
-        if length > 0 then
-            .[-1].message.content[]? |
-            select(.type == "text") |
-            .text
-        else
-            empty
-        end
-    '); then
-        echo "Error: Failed to parse transcript JSON" >&2
-        return 1
-    fi
-    
-    echo "$result"
-}
+# Source shared utilities
+source "$(dirname "$0")/shared-utils.sh"
 
 # Load environment variables from .env file
 load_env() {

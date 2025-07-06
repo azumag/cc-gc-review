@@ -191,6 +191,7 @@ jobs:
       run: |
         chmod +x gemini-review-hook.sh
         chmod +x hook-handler.sh
+        chmod +x shared-utils.sh
         chmod +x test/run_tests.sh
     
     - name: Integration test - Mock scenario
