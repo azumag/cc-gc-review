@@ -7,6 +7,13 @@ set -e
 
 echo "=== Gemini Content Extraction Test ==="
 
+# Get absolute path to hooks directory before changing directories
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    HOOKS_DIR="$GITHUB_WORKSPACE/hooks"
+else
+    HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)/hooks"
+fi
+
 # Create test directory
 TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
@@ -121,11 +128,7 @@ echo "- Has API endpoints: $(if [[ "$content_for_review" == *"API"* || "$content
 echo -e "\n6. Comparison with shared-utils.sh implementation..."
 
 # Compare with shared-utils.sh function
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
-    source "$GITHUB_WORKSPACE/hooks/shared-utils.sh"
-else
-    source ../hooks/shared-utils.sh
-fi
+source "$HOOKS_DIR/shared-utils.sh"
 shared_utils_result=$(extract_last_assistant_message "realistic_transcript.jsonl" 0 true)
 
 echo "Gemini hook extraction: ${#extracted_content} characters"

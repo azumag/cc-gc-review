@@ -5,18 +5,20 @@ set -e
 
 echo "=== Core Notification System Test ==="
 
+# Get absolute path to hooks directory before changing directories
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    HOOKS_DIR="$GITHUB_WORKSPACE/hooks"
+else
+    HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)/hooks"
+fi
+
 # Create test environment
 TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy notification files
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
-    cp "$GITHUB_WORKSPACE/hooks/shared-utils.sh" .
-    cp "$GITHUB_WORKSPACE/hooks/notification.sh" .
-else
-    cp ../hooks/shared-utils.sh .
-    cp ../hooks/notification.sh .
-fi
+cp "$HOOKS_DIR/shared-utils.sh" .
+cp "$HOOKS_DIR/notification.sh" .
 
 # Create test transcript
 cat > test_transcript.jsonl << 'EOF'

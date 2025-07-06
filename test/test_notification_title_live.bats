@@ -11,9 +11,14 @@ setup() {
     cd "$TEST_DIR"
 
     # Mock the shared-utils.sh dependency
-    mkdir -p hooks
-    echo '#!/bin/bash' > hooks/shared-utils.sh
-    echo 'extract_last_assistant_message() { echo "mock function"; }' >> hooks/shared-utils.sh
+    echo '#!/bin/bash' > shared-utils.sh
+    echo 'extract_last_assistant_message() { echo "mock function"; }' >> shared-utils.sh
+    
+    # Copy and modify notification.sh to work in test environment
+    cp "$REPO_ROOT/hooks/notification.sh" ./notification.sh
+    
+    # Fix the path in notification.sh to use local shared-utils.sh
+    sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh
     
     # Create a mock git repository
     git init
@@ -28,7 +33,7 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should extract last meaningful line from summary" {
-    source "$REPO_ROOT/hooks/notification.sh"
+    source "./notification.sh"
     
     local summary="Work Summary: Multiple tasks completed
     
@@ -43,12 +48,7 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle numbered lists" {
-    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
-    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
-        source "$GITHUB_WORKSPACE/hooks/notification.sh"
-    else
-        source "../../hooks/notification.sh"
-    fi
+    source "./notification.sh"
     
     local summary="1. Initialize the project
     2. Configure the settings
@@ -60,12 +60,7 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle different from full summary" {
-    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
-    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
-        source "$GITHUB_WORKSPACE/hooks/notification.sh"
-    else
-        source "../../hooks/notification.sh"
-    fi
+    source "./notification.sh"
     
     local summary="Work Summary: Fixed Discord notification issues
 
