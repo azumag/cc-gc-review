@@ -89,18 +89,23 @@ get_work_summary() {
     local summary=""
     
     if [ -f "$transcript_path" ]; then
-        # Get all assistant messages from the session for complete context
+        # Get the last substantial assistant message that's not just tool calls
         local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
-        local all_messages=$(jq -r "$jq_filter" "$transcript_path" 2>/dev/null)
         
-        if [ -n "$all_messages" ]; then
-            # Include all assistant messages, but filter out very short/duplicate ones
-            summary=$(echo "$all_messages" | grep -v "^$" | awk 'length($0) > 20' | head -20)
-            # Join with double newlines for readability
-            summary=$(echo "$summary" | paste -sd '\n\n' -)
+        # Get the last few substantial messages (avoiding tool-only messages)
+        local substantial_messages=$(jq -r "$jq_filter" "$transcript_path" 2>/dev/null | grep -v "^$" | awk 'length($0) > 50' | tail -3)
+        
+        if [ -n "$substantial_messages" ]; then
+            # Use the most recent substantial message as summary
+            summary=$(echo "$substantial_messages" | tail -1)
         else
-            # Fallback to single last message
-            summary=$(extract_last_assistant_message "$transcript_path" 0)
+            # Fallback: try any assistant message
+            summary=$(jq -r "$jq_filter" "$transcript_path" 2>/dev/null | tail -1)
+        fi
+        
+        # If still empty, provide a generic fallback
+        if [ -z "$summary" ]; then
+            summary="Work completed in project $(basename $(pwd))"
         fi
     fi
     
