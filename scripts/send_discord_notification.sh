@@ -32,26 +32,39 @@ fi
 
 # Collect failed jobs information
 FAILED_JOBS=""
+FAILED_COUNT=0
 if [[ "$TEST_RESULT" == "failure" ]]; then
-  FAILED_JOBS="${FAILED_JOBS}• Test Suite\n"
+  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
+  FAILED_JOBS="${FAILED_JOBS}• Test Suite"
+  ((FAILED_COUNT++))
 fi
 if [[ "$LINT_RESULT" == "failure" ]]; then
-  FAILED_JOBS="${FAILED_JOBS}• Linting\n"
+  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
+  FAILED_JOBS="${FAILED_JOBS}• Linting"
+  ((FAILED_COUNT++))
 fi
 if [[ "$FORMAT_RESULT" == "failure" ]]; then
-  FAILED_JOBS="${FAILED_JOBS}• Formatting\n"
+  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
+  FAILED_JOBS="${FAILED_JOBS}• Formatting"
+  ((FAILED_COUNT++))
 fi
 if [[ "$INTEGRATION_RESULT" == "failure" ]]; then
-  FAILED_JOBS="${FAILED_JOBS}• Integration Tests\n"
+  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
+  FAILED_JOBS="${FAILED_JOBS}• Integration Tests"
+  ((FAILED_COUNT++))
 fi
 if [[ "$RELEASE_RESULT" == "failure" ]]; then
-  FAILED_JOBS="${FAILED_JOBS}• Release Process\n"
+  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
+  FAILED_JOBS="${FAILED_JOBS}• Release Process"
+  ((FAILED_COUNT++))
 fi
 
 # Create JSON payload with proper escaping
 create_discord_payload() {
     # Properly escape JSON values
-    local failed_jobs_json=$(echo -n "${FAILED_JOBS}" | jq -R -s '.')
+    # Convert literal \n to actual newlines for proper JSON encoding
+    local failed_jobs_formatted=$(echo -e "${FAILED_JOBS}")
+    local failed_jobs_json=$(echo -n "${failed_jobs_formatted}" | jq -R -s '.')
     local branch_json=$(echo -n "${BRANCH}" | jq -R -s '.')
     local commit_short="${SHA:0:7}"
     local commit_json=$(echo -n "${commit_short}" | jq -R -s '.')
@@ -142,7 +155,7 @@ send_notification() {
 main() {
     echo "=== Discord Notification Script ==="
     echo "Branch: $BRANCH"
-    echo "Failed Jobs: $FAILED_JOBS"
+    echo -e "Failed Jobs: $FAILED_JOBS"
     echo "Commit: ${SHA:0:7}"
     echo "Author: $ACTOR"
     echo "=================================="
