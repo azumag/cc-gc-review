@@ -6,7 +6,7 @@ source "$(dirname "$0")/shared-utils.sh"
 # Configuration constants
 readonly CLAUDE_SUMMARY_MAX_LENGTH=1000
 readonly CLAUDE_SUMMARY_PRESERVE_LENGTH=400
-readonly GEMINI_TIMEOUT=120
+readonly GEMINI_TIMEOUT=30
 
 # Cleanup function for temporary files
 cleanup() {
@@ -282,8 +282,10 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
     debug_log "FLASH" "Rate limit detected, switching to Flash model"
     >&2 echo "[gemini-review-hook] Rate limit detected, switching to Flash model..."
 
+    # Use shorter timeout for Flash model (it should be faster)
+    local flash_timeout=$((GEMINI_TIMEOUT / 2))
     if command -v timeout >/dev/null 2>&1; then
-        timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        timeout ${flash_timeout}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"
@@ -293,7 +295,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 
         WAIT_COUNT=0
         GEMINI_EXIT_CODE=124
-        while [[ $WAIT_COUNT -lt $GEMINI_TIMEOUT ]]; do
+        while [[ $WAIT_COUNT -lt $flash_timeout ]]; do
             if ! kill -0 $FLASH_PID 2>/dev/null; then
                 wait $FLASH_PID
                 GEMINI_EXIT_CODE=$?
@@ -303,7 +305,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
             ((WAIT_COUNT++))
         done
 
-        if [[ $WAIT_COUNT -ge $GEMINI_TIMEOUT ]]; then
+        if [[ $WAIT_COUNT -ge $flash_timeout ]]; then
             kill -TERM $FLASH_PID 2>/dev/null || true
             sleep 2
             kill -KILL $FLASH_PID 2>/dev/null || true
@@ -348,6 +350,31 @@ fi
 
 # Note: Cleanup is handled by trap on script exit
 
+# Quality validation function
+validate_review_quality() {
+    local review="$1"
+    local min_length=200
+    local review_length=${#review}
+    
+    debug_log "QUALITY" "Review length: $review_length characters"
+    
+    # Check minimum length
+    if [ $review_length -lt $min_length ]; then
+        debug_log "QUALITY" "Review too short ($review_length < $min_length), rejecting"
+        return 1
+    fi
+    
+    # Check for specific technical content
+    local tech_mentions=$(echo "$review" | grep -c -i "コード\|関数\|変数\|エラー\|テスト\|実装\|修正\|改善\|Git\|commit\|line\|行" || true)
+    if [ $tech_mentions -lt 3 ]; then
+        debug_log "QUALITY" "Insufficient technical content ($tech_mentions mentions), rejecting"
+        return 1
+    fi
+    
+    debug_log "QUALITY" "Review quality acceptable"
+    return 0
+}
+
 # Dynamic decision logic based on review content
 DECISION="block" # Default to block
 
@@ -361,11 +388,19 @@ elif [[ $GEMINI_REVIEW == "REVIEW_RATE_LIMITED" ]]; then
     DECISION="block"
     COMBINED_REASON=$(echo "Review skipped due to rate limiting. Please try again later." | jq -Rs .)
 elif [[ -n $GEMINI_REVIEW ]]; then
-    debug_log "DECISION" "Review content received, blocking for review"
-    DECISION="block"
-    # Safely combine review and principles, handling potential JSON content in GEMINI_REVIEW
-    COMBINED_CONTENT=$(printf "%s\n\n%s" "$GEMINI_REVIEW" "$PRINCIPLES")
-    COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
+    debug_log "DECISION" "Review content received, validating quality"
+    
+    # Validate review quality
+    if validate_review_quality "$GEMINI_REVIEW"; then
+        DECISION="block"
+        # Safely combine review and principles, handling potential JSON content in GEMINI_REVIEW
+        COMBINED_CONTENT=$(printf "%s\n\n%s" "$GEMINI_REVIEW" "$PRINCIPLES")
+        COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
+    else
+        # Quality insufficient, provide fallback
+        DECISION="block"
+        COMBINED_REASON=$(echo "Review quality insufficient. Please retry or check system configuration. Original review length: ${#GEMINI_REVIEW} characters." | jq -Rs .)
+    fi
 else
     debug_log "DECISION" "No review content, allowing to proceed"
     DECISION="approve"
