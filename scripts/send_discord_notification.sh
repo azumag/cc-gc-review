@@ -7,8 +7,8 @@ set -euo pipefail
 
 # Check if all required arguments are provided
 if [ $# -ne 11 ]; then
-    printf "Error: Missing required arguments\n"
-    printf "Usage: %s [webhook_url] [test_result] [lint_result] [format_result] [integration_result] [release_result] [branch] [sha] [actor] [commit_message] [run_url]\n" "$0"
+    printf "Error: Missing required arguments\n" >&2
+    printf "Usage: %s [webhook_url] [test_result] [lint_result] [format_result] [integration_result] [release_result] [branch] [sha] [actor] [commit_message] [run_url]\n" "$0" >&2
     exit 1
 fi
 
@@ -26,28 +26,37 @@ RUN_URL="${11}"
 
 # Validate webhook URL
 if [[ ! "$WEBHOOK_URL" =~ ^https://discord(app)?\.com/api/webhooks/ ]]; then
-    printf "Error: Invalid Discord webhook URL\n"
+    printf "Error: Invalid Discord webhook URL\n" >&2
     exit 1
 fi
 
-# Collect failed jobs information using arrays for clean, DRY code
-declare -a failed_jobs_array=()
-declare -a job_results=("$TEST_RESULT" "$LINT_RESULT" "$FORMAT_RESULT" "$INTEGRATION_RESULT" "$RELEASE_RESULT")
-declare -a job_names=("Test Suite" "Linting" "Formatting" "Integration Tests" "Release Process")
-
-for i in "${!job_results[@]}"; do
-    if [[ "${job_results[$i]}" == "failure" ]]; then
-        failed_jobs_array+=("• ${job_names[$i]}")
+# Function to collect failed jobs with proper encapsulation
+collect_failed_jobs() {
+    local -a job_results=("$@")
+    local -a job_names=("Test Suite" "Linting" "Formatting" "Integration Tests" "Release Process")
+    local -a failed_jobs_array=()
+    
+    for i in "${!job_results[@]}"; do
+        if [[ "${job_results[$i]}" == "failure" ]]; then
+            failed_jobs_array+=("• ${job_names[$i]}")
+        fi
+    done
+    
+    # Join array elements with newlines using IFS manipulation in a subshell
+    local failed_jobs=""
+    if [[ ${#failed_jobs_array[@]} -gt 0 ]]; then
+        # Use a subshell to avoid affecting global IFS
+        failed_jobs=$(
+            local IFS=$'\n'
+            echo -n "${failed_jobs_array[*]}"
+        )
     fi
-done
+    
+    echo -n "$failed_jobs"
+}
 
-# Join array elements with newlines using printf
-FAILED_JOBS=""
-if [[ ${#failed_jobs_array[@]} -gt 0 ]]; then
-    FAILED_JOBS=$(printf "%s\\n" "${failed_jobs_array[@]}")
-    # Remove trailing newline
-    FAILED_JOBS="${FAILED_JOBS%\\n}"
-fi
+# Collect failed jobs information
+FAILED_JOBS=$(collect_failed_jobs "$TEST_RESULT" "$LINT_RESULT" "$FORMAT_RESULT" "$INTEGRATION_RESULT" "$RELEASE_RESULT")
 
 # Create JSON payload with proper escaping
 create_discord_payload() {
@@ -136,7 +145,7 @@ send_notification() {
         printf "✅ Discord notification sent successfully\n"
         return 0
     else
-        printf "❌ Failed to send Discord notification\n"
+        printf "❌ Failed to send Discord notification\n" >&2
         return 1
     fi
 }
@@ -154,7 +163,7 @@ main() {
         printf "Notification process completed successfully\n"
         exit 0
     else
-        printf "Notification process failed\n"
+        printf "Notification process failed\n" >&2
         exit 1
     fi
 }
