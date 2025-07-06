@@ -229,9 +229,8 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
     >&2 echo "[gemini-review-hook] Rate limit detected, switching to Flash model..."
 
     # Use shorter timeout for Flash model (it should be faster)
-    local flash_timeout=$((GEMINI_TIMEOUT / 2))
     if command -v timeout >/dev/null 2>&1; then
-        timeout ${flash_timeout}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"
@@ -241,7 +240,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 
         WAIT_COUNT=0
         GEMINI_EXIT_CODE=124
-        while [[ $WAIT_COUNT -lt $flash_timeout ]]; do
+        while [[ $WAIT_COUNT -lt $GEMINI_TIMEOUT ]]; do
             if ! kill -0 $FLASH_PID 2>/dev/null; then
                 wait $FLASH_PID
                 GEMINI_EXIT_CODE=$?
@@ -251,7 +250,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
             ((WAIT_COUNT++))
         done
 
-        if [[ $WAIT_COUNT -ge $flash_timeout ]]; then
+        if [[ $WAIT_COUNT -ge $GEMINI_TIMEOUT ]]; then
             kill -TERM $FLASH_PID 2>/dev/null || true
             sleep 2
             kill -KILL $FLASH_PID 2>/dev/null || true
