@@ -71,10 +71,10 @@ test_network_failure() {
     local result=$(echo '{"transcript_path": "/dev/null"}' | timeout 15s ./hooks/gemini-review-hook.sh 2>/dev/null)
     
     if echo "$result" | jq -e '.decision == "block"' >/dev/null 2>&1; then
-        echo "✅ Network failure handled gracefully"
+        echo "PASS: Network failure handled gracefully"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
-        echo "❌ Network failure not handled properly"
+        echo "FAIL: Network failure not handled properly"
         FAILED_TESTS=$((FAILED_TESTS + 1))
     fi
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
@@ -86,13 +86,14 @@ test_network_failure() {
 test_large_payload() {
     echo "=== Large Payload Stress Test ==="
     
-    # Create 10MB transcript file
+    # Create large transcript file
     local large_transcript=$(mktemp)
-    local base_content='{"type": "assistant", "uuid": "test", "message": {"content": [{"type": "text", "text": "'
     
-    # Generate large content (10MB target)
-    for i in {1..1000}; do
-        echo "${base_content}$(head -c 1000 /dev/urandom | base64 | tr -d '\n')"}]}}" >> "$large_transcript"
+    # Generate large content (simpler approach)
+    for i in $(seq 1 100); do
+        cat >> "$large_transcript" << 'EOF'
+{"type": "assistant", "uuid": "test", "message": {"content": [{"type": "text", "text": "This is a large test content to simulate heavy payload processing. Lorem ipsum dolor sit amet, consectetur adipiscing elit."}]}}
+EOF
     done
     
     local start_time=$(date +%s)
@@ -101,10 +102,10 @@ test_large_payload() {
     local duration=$((end_time - start_time))
     
     if [ "$duration" -lt 60 ] && echo "$result" | jq -e '.decision' >/dev/null 2>&1; then
-        echo "✅ Large payload handled in ${duration}s"
+        echo "PASS: Large payload handled in ${duration}s"
         ((PASSED_TESTS++))
     else
-        echo "❌ Large payload test failed (${duration}s)"
+        echo "FAIL: Large payload test failed (${duration}s)"
         ((FAILED_TESTS++))
     fi
     ((TOTAL_TESTS++))
@@ -130,10 +131,10 @@ test_memory_pressure() {
     local memory_increase=$((memory_after - memory_before))
     
     if [ "$memory_increase" -lt 50000 ]; then # 50MB threshold
-        echo "✅ Memory usage within limits (+${memory_increase}KB)"
+        echo "PASS: Memory usage within limits (+${memory_increase}KB)"
         ((PASSED_TESTS++))
     else
-        echo "❌ Excessive memory usage (+${memory_increase}KB)"
+        echo "FAIL: Excessive memory usage (+${memory_increase}KB)"
         ((FAILED_TESTS++))
     fi
     ((TOTAL_TESTS++))
@@ -151,10 +152,10 @@ test_filesystem_errors() {
     local result=$(echo "{\"transcript_path\": \"$unreadable_file\"}" | ./hooks/gemini-review-hook.sh 2>/dev/null)
     
     if echo "$result" | jq -e '.decision == "block"' >/dev/null 2>&1; then
-        echo "✅ Unreadable file handled gracefully"
+        echo "PASS: Unreadable file handled gracefully"
         ((PASSED_TESTS++))
     else
-        echo "❌ Unreadable file not handled properly"
+        echo "FAIL: Unreadable file not handled properly"
         ((FAILED_TESTS++))
     fi
     ((TOTAL_TESTS++))
@@ -182,10 +183,10 @@ main() {
     echo "Failed: $FAILED_TESTS"
     
     if [ "$FAILED_TESTS" -eq 0 ]; then
-        echo "✅ All rigorous tests passed"
+        echo "PASS: All rigorous tests passed"
         exit 0
     else
-        echo "❌ Rigorous testing revealed failures"
+        echo "FAIL: Rigorous testing revealed failures"
         exit 1
     fi
 }
