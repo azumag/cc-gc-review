@@ -56,7 +56,7 @@ find_transcript_path() {
     return 1
 }
 
-# Extract simple task title from work summary (last line)
+# Extract task title from last line of work summary
 extract_task_title() {
     local summary="$1"
     
@@ -65,8 +65,8 @@ extract_task_title() {
         return
     fi
     
-    # Extract the last meaningful line as title (simplified approach)
-    local title=$(echo "$summary" | grep -v "^$" | tail -n 1 | head -c 80)
+    # Extract the last meaningful line as title
+    local title=$(echo "$summary" | grep -v "^$" | tail -n 1)
     
     # Clean up and format title
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
@@ -75,28 +75,29 @@ extract_task_title() {
     title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//')
     
     # Fallback if title is too short or empty
-    if [ ${#title} -lt 10 ]; then
-        title="Code Changes Completed"
+    if [ ${#title} -lt 5 ]; then
+        title="Task Completed"
     fi
     
     echo "$title"
 }
 
-# Get full work summary from Claude Code transcript
+# Get complete work summary from Claude Code transcript  
 get_work_summary() {
     local transcript_path="$1"
     local summary=""
     
     if [ -f "$transcript_path" ]; then
-        # Get the complete last assistant message (no character limit)
+        # Get the complete last assistant message (full content)
         summary=$(extract_last_assistant_message "$transcript_path" 0)
         
         # If summary is very short, try to get more context from recent messages
         if [ ${#summary} -lt 100 ]; then
             local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
-            local recent_messages=$(tail -n 30 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 2)
+            local recent_messages=$(tail -n 50 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 3)
             
             if [ -n "$recent_messages" ]; then
+                # Combine all recent messages for comprehensive summary
                 summary=$(echo "$recent_messages" | grep -v "^$")
             fi
         fi
