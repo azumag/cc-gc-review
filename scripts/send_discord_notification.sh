@@ -50,8 +50,16 @@ fi
 
 # Create JSON payload with proper escaping
 create_discord_payload() {
-    local json_payload
-    json_payload=$(cat <<EOF
+    # Properly escape JSON values
+    local failed_jobs_json=$(echo -n "${FAILED_JOBS}" | jq -R -s '.')
+    local branch_json=$(echo -n "${BRANCH}" | jq -R -s '.')
+    local commit_short="${SHA:0:7}"
+    local commit_json=$(echo -n "${commit_short}" | jq -R -s '.')
+    local actor_json=$(echo -n "${ACTOR}" | jq -R -s '.')
+    local message_json=$(echo -n "${COMMIT_MESSAGE}" | jq -R -s '.')
+    local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+    
+    cat <<EOF
 {
   "content": "🚨 **CI Build Failed** 🚨",
   "embeds": [
@@ -61,34 +69,34 @@ create_discord_payload() {
       "fields": [
         {
           "name": "Failed Jobs",
-          "value": "$(echo "${FAILED_JOBS}" | jq -R -s '.')",
+          "value": ${failed_jobs_json},
           "inline": true
         },
         {
           "name": "Branch",
-          "value": "$(echo "${BRANCH}" | jq -R -s '.')",
+          "value": ${branch_json},
           "inline": true
         },
         {
           "name": "Commit",
-          "value": "`$(echo "${SHA:0:7}" | jq -R -s '.')`",
+          "value": ${commit_json},
           "inline": true
         },
         {
           "name": "Author",
-          "value": "$(echo "${ACTOR}" | jq -R -s '.')",
+          "value": ${actor_json},
           "inline": true
         },
         {
           "name": "Commit Message",
-          "value": "$(echo "${COMMIT_MESSAGE}" | jq -R -s '.')",
+          "value": ${message_json},
           "inline": false
         }
       ],
       "footer": {
         "text": "GitHub Actions"
       },
-      "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+      "timestamp": "${timestamp}"
     }
   ],
   "components": [
@@ -106,8 +114,6 @@ create_discord_payload() {
   ]
 }
 EOF
-    )
-    echo "$json_payload"
 }
 
 # Send notification to Discord with error handling
