@@ -189,76 +189,152 @@ run_tests() {
         local bats_exit_code=$?
         local shell_tests_exit_code=0
         
-        # Define shell script tests to run - flexible configuration
-        local shell_tests=(
-            "test_notification_core.sh:Notification core tests"
-            "test_gemini_content_only.sh:Gemini hook integration tests"
-            "test_notification_examples.sh:Notification workflow examples"
-        )
+        # Load test configuration from external JSON file
+        local config_file="${TEST_DIR}/test-config.json"
+        if [ ! -f "$config_file" ]; then
+            echo -e "${RED}Error: Test configuration file not found: $config_file${NC}" >&2
+            return 1
+        fi
+        
+        # Extract test definitions from JSON config
+        local shell_tests_json
+        if ! shell_tests_json=$(jq -r '.shell_tests[] | "\(.file):\(.description):\(.timeout // 60):\(.category)"' "$config_file" 2>/dev/null); then
+            echo -e "${RED}Error: Failed to parse test configuration${NC}" >&2
+            return 1
+        fi
+        
+        # Extract error patterns from config
+        local critical_patterns warning_patterns error_patterns
+        critical_patterns=$(jq -r '.error_patterns.critical | join("|")' "$config_file" 2>/dev/null || echo "FATAL|CRITICAL")
+        error_patterns=$(jq -r '.error_patterns.errors | join("|")' "$config_file" 2>/dev/null || echo "Error:|✗|FAIL|Failed")
+        warning_patterns=$(jq -r '.error_patterns.warnings | join("|")' "$config_file" 2>/dev/null || echo "WARN|Warning")
+        
+        # Extract output limits
+        local max_error_lines max_error_indicators max_failed_cases
+        max_error_lines=$(jq -r '.output_limits.max_error_lines // 10' "$config_file" 2>/dev/null)
+        max_error_indicators=$(jq -r '.output_limits.max_error_indicators // 5' "$config_file" 2>/dev/null)
+        max_failed_cases=$(jq -r '.output_limits.max_failed_cases // 3' "$config_file" 2>/dev/null)
         
         # Track test results with associative arrays for better maintainability
         declare -A test_results
-        declare -A test_outputs
+        declare -A test_stdout_outputs
+        declare -A test_stderr_outputs
+        declare -A test_categories
         
-        # Run each shell script test
-        for test_spec in "${shell_tests[@]}"; do
-            local test_file="${test_spec%:*}"
-            local test_description="${test_spec#*:}"
+        # Run each shell script test based on JSON configuration
+        while IFS= read -r test_spec; do
+            [ -z "$test_spec" ] && continue
             
-            echo -e "\n${YELLOW}Running $test_description...${NC}"
+            local test_file test_description test_timeout test_category
+            IFS=':' read -r test_file test_description test_timeout test_category <<< "$test_spec"
             
-            local test_output
-            if test_output=$(./"$test_file" 2>&1); then
+            echo -e "\n${YELLOW}Running $test_description (timeout: ${test_timeout}s)...${NC}"
+            
+            # Create temporary files for stdout and stderr separation
+            local stdout_file stderr_file
+            stdout_file=$(mktemp)
+            stderr_file=$(mktemp)
+            
+            # Run test with timeout and separated output streams
+            local test_exit_code=0
+            if command -v timeout >/dev/null 2>&1; then
+                timeout "${test_timeout}s" ./"$test_file" >"$stdout_file" 2>"$stderr_file" || test_exit_code=$?
+            else
+                ./"$test_file" >"$stdout_file" 2>"$stderr_file" || test_exit_code=$?
+            fi
+            
+            # Store results and outputs
+            local stdout_content stderr_content
+            stdout_content=$(cat "$stdout_file" 2>/dev/null)
+            stderr_content=$(cat "$stderr_file" 2>/dev/null)
+            
+            if [ "$test_exit_code" -eq 0 ]; then
                 echo -e "${GREEN}✓ $test_description passed${NC}"
                 test_results["$test_file"]="PASSED"
             else
-                echo -e "${RED}✗ $test_description failed${NC}"
+                echo -e "${RED}✗ $test_description failed (exit code: $test_exit_code)${NC}"
                 test_results["$test_file"]="FAILED"
-                test_outputs["$test_file"]="$test_output"
                 shell_tests_exit_code=1
             fi
-        done
+            
+            test_stdout_outputs["$test_file"]="$stdout_content"
+            test_stderr_outputs["$test_file"]="$stderr_content"
+            test_categories["$test_file"]="$test_category"
+            
+            # Cleanup temporary files
+            rm -f "$stdout_file" "$stderr_file"
+            
+        done <<< "$shell_tests_json"
         
         # Report detailed failure information if any tests failed
         if [ "$shell_tests_exit_code" -ne 0 ]; then
-            echo -e "\n${RED}=== SHELL TEST FAILURE DETAILS ===${NC}"
+            echo -e "\n${RED}=== SHELL TEST FAILURE ANALYSIS ===${NC}"
             
+            # Group failures by category
+            declare -A category_failures
             for test_file in "${!test_results[@]}"; do
                 if [ "${test_results[$test_file]}" = "FAILED" ]; then
-                    echo -e "\n${RED}Failed Test: $test_file${NC}"
-                    
-                    local test_output="${test_outputs[$test_file]}"
-                    if [ -n "$test_output" ]; then
-                        echo -e "${YELLOW}Error Output (last 10 lines):${NC}"
-                        echo "$test_output" | tail -n 10 | sed 's/^/  /'
-                        
-                        # Look for specific error patterns
-                        local error_lines
-                        if error_lines=$(echo "$test_output" | grep -E "(assertion failed|Test failed|Error:|✗|FAIL|Failed)" | head -5); then
-                            echo -e "${YELLOW}Key Error Indicators:${NC}"
-                            echo "$error_lines" | sed 's/^/  🔍 /'
-                        fi
-                        
-                        # Extract test case failures if available
-                        local failed_cases
-                        if failed_cases=$(echo "$test_output" | grep -E "^(✗|FAIL)" | head -3); then
-                            echo -e "${YELLOW}Failed Test Cases:${NC}"
-                            echo "$failed_cases" | sed 's/^/  📋 /'
-                        fi
-                    else
-                        echo -e "${YELLOW}No detailed output captured${NC}"
-                    fi
-                    
-                    echo -e "${BLUE}$(printf '%.0s-' {1..50})${NC}"
+                    local category="${test_categories[$test_file]}"
+                    category_failures["$category"]+="$test_file "
                 fi
             done
             
-            echo -e "\n${YELLOW}Debugging Guide:${NC}"
+            # Report failures by category
+            for category in "${!category_failures[@]}"; do
+                echo -e "\n${BLUE}=== $category Test Failures ===${NC}"
+                for test_file in ${category_failures[$category]}; do
+                    echo -e "\n${RED}Failed Test: $test_file${NC}"
+                    
+                    local stdout_content="${test_stdout_outputs[$test_file]}"
+                    local stderr_content="${test_stderr_outputs[$test_file]}"
+                    
+                    # Analyze stderr first (usually contains error information)
+                    if [ -n "$stderr_content" ]; then
+                        echo -e "${YELLOW}Error Output (stderr, last $max_error_lines lines):${NC}"
+                        echo "$stderr_content" | tail -n "$max_error_lines" | sed 's/^/  🔥 /'
+                        
+                        # Look for critical patterns first
+                        local critical_lines
+                        if critical_lines=$(echo "$stderr_content" | grep -E "($critical_patterns)" | head -"$max_error_indicators"); then
+                            echo -e "${RED}Critical Issues:${NC}"
+                            echo "$critical_lines" | sed 's/^/  💥 /'
+                        fi
+                        
+                        # Look for error patterns
+                        local error_lines
+                        if error_lines=$(echo "$stderr_content" | grep -E "($error_patterns)" | head -"$max_error_indicators"); then
+                            echo -e "${YELLOW}Error Indicators:${NC}"
+                            echo "$error_lines" | sed 's/^/  🔍 /'
+                        fi
+                    fi
+                    
+                    # Analyze stdout for test case failures
+                    if [ -n "$stdout_content" ]; then
+                        local failed_cases
+                        if failed_cases=$(echo "$stdout_content" | grep -E "($error_patterns)" | head -"$max_failed_cases"); then
+                            echo -e "${YELLOW}Failed Test Cases:${NC}"
+                            echo "$failed_cases" | sed 's/^/  📋 /'
+                        fi
+                        
+                        # Show warnings if any
+                        local warning_lines
+                        if warning_lines=$(echo "$stdout_content" | grep -E "($warning_patterns)" | head -3); then
+                            echo -e "${YELLOW}Warnings:${NC}"
+                            echo "$warning_lines" | sed 's/^/  ⚠️  /'
+                        fi
+                    fi
+                    
+                    echo -e "${BLUE}$(printf '%.0s-' {1..50})${NC}"
+                done
+            done
+            
+            echo -e "\n${YELLOW}Structured Debugging Guide:${NC}"
             echo -e "  📝 Re-run specific test: ${BLUE}./\${test_file}${NC}"
             echo -e "  🔍 Verbose mode: ${BLUE}./run_tests.sh -v${NC}"
-            echo -e "  ⚙️  Check dependencies: tmux, jq, timeout, terminal-notifier"
-            echo -e "  🧹 Clean environment: Remove stale tmux sessions, temp files"
-            echo -e "  📊 Test logs location: /tmp/\${test_name}*.log (if applicable)"
+            echo -e "  📊 Analyze category: Check all ${BLUE}\${category}${NC} tests"
+            echo -e "  ⚙️  Check dependencies: $(jq -r '.shell_tests[].required_dependencies[]?' "$config_file" 2>/dev/null | sort -u | tr '\n' ' ')"
+            echo -e "  🧹 Clean environment: Remove stale sessions, clear temp files"
+            echo -e "  📋 Review config: ${BLUE}$config_file${NC}"
         fi
         
         # Report overall test results summary
