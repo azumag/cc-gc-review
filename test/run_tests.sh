@@ -373,17 +373,137 @@ run_tests() {
         max_failed_cases=$(jq -r '.output_limits.max_failed_cases // 3' "$config_file" 2>/dev/null)
 
         # Check Bash version for associative array support
+        local use_associative_arrays=true
         if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
-            echo -e "${RED}Error: Bash 4.0+ required for associative arrays (current: $BASH_VERSION)${NC}" >&2
-            echo -e "${YELLOW}Please upgrade Bash or run individual test scripts${NC}" >&2
-            return 1
+            log_warning "Bash 3.x detected (current: $BASH_VERSION)"
+            log_warning "Using legacy array implementation for compatibility"
+            use_associative_arrays=false
         fi
 
-        # Track test results with associative arrays for better maintainability
-        declare -A test_results
-        declare -A test_stdout_outputs
-        declare -A test_stderr_outputs
-        declare -A test_categories
+        # Track test results - use associative arrays for Bash 4+ or legacy arrays for Bash 3.x
+        if [ "$use_associative_arrays" = true ]; then
+            declare -A test_results
+            declare -A test_stdout_outputs
+            declare -A test_stderr_outputs
+            declare -A test_categories
+        else
+            # Legacy implementation using indexed arrays and key encoding
+            declare -a test_files_list
+            declare -a test_results_list
+            declare -a test_stdout_outputs_list
+            declare -a test_stderr_outputs_list
+            declare -a test_categories_list
+        fi
+
+        # Helper functions for cross-version compatibility
+        set_test_result() {
+            local test_file="$1"
+            local result="$2"
+            if [ "$use_associative_arrays" = true ]; then
+                test_results["$test_file"]="$result"
+            else
+                test_files_list+=("$test_file")
+                test_results_list+=("$result")
+            fi
+        }
+
+        get_test_result() {
+            local test_file="$1"
+            if [ "$use_associative_arrays" = true ]; then
+                echo "${test_results[$test_file]}"
+            else
+                local i
+                for i in "${!test_files_list[@]}"; do
+                    if [ "${test_files_list[$i]}" = "$test_file" ]; then
+                        echo "${test_results_list[$i]}"
+                        return
+                    fi
+                done
+            fi
+        }
+
+        set_test_stdout() {
+            local test_file="$1"
+            local stdout_content="$2"
+            if [ "$use_associative_arrays" = true ]; then
+                test_stdout_outputs["$test_file"]="$stdout_content"
+            else
+                test_stdout_outputs_list+=("$stdout_content")
+            fi
+        }
+
+        get_test_stdout() {
+            local test_file="$1"
+            if [ "$use_associative_arrays" = true ]; then
+                echo "${test_stdout_outputs[$test_file]}"
+            else
+                local i
+                for i in "${!test_files_list[@]}"; do
+                    if [ "${test_files_list[$i]}" = "$test_file" ]; then
+                        echo "${test_stdout_outputs_list[$i]}"
+                        return
+                    fi
+                done
+            fi
+        }
+
+        set_test_stderr() {
+            local test_file="$1"
+            local stderr_content="$2"
+            if [ "$use_associative_arrays" = true ]; then
+                test_stderr_outputs["$test_file"]="$stderr_content"
+            else
+                test_stderr_outputs_list+=("$stderr_content")
+            fi
+        }
+
+        get_test_stderr() {
+            local test_file="$1"
+            if [ "$use_associative_arrays" = true ]; then
+                echo "${test_stderr_outputs[$test_file]}"
+            else
+                local i
+                for i in "${!test_files_list[@]}"; do
+                    if [ "${test_files_list[$i]}" = "$test_file" ]; then
+                        echo "${test_stderr_outputs_list[$i]}"
+                        return
+                    fi
+                done
+            fi
+        }
+
+        set_test_category() {
+            local test_file="$1"
+            local category="$2"
+            if [ "$use_associative_arrays" = true ]; then
+                test_categories["$test_file"]="$category"
+            else
+                test_categories_list+=("$category")
+            fi
+        }
+
+        get_test_category() {
+            local test_file="$1"
+            if [ "$use_associative_arrays" = true ]; then
+                echo "${test_categories[$test_file]}"
+            else
+                local i
+                for i in "${!test_files_list[@]}"; do
+                    if [ "${test_files_list[$i]}" = "$test_file" ]; then
+                        echo "${test_categories_list[$i]}"
+                        return
+                    fi
+                done
+            fi
+        }
+
+        get_all_test_files() {
+            if [ "$use_associative_arrays" = true ]; then
+                echo "${!test_results[@]}"
+            else
+                echo "${test_files_list[@]}"
+            fi
+        }
 
         # Run each shell script test based on JSON configuration
         while IFS= read -r test_spec; do
@@ -422,16 +542,16 @@ run_tests() {
 
             if [ "$test_exit_code" -eq 0 ]; then
                 log_success "✓ $test_description passed"
-                test_results["$test_file"]="PASSED"
+                set_test_result "$test_file" "PASSED"
             else
                 log_error "✗ $test_description failed (exit code: $test_exit_code)"
-                test_results["$test_file"]="FAILED"
+                set_test_result "$test_file" "FAILED"
                 shell_tests_exit_code=1
             fi
 
-            test_stdout_outputs["$test_file"]="$stdout_content"
-            test_stderr_outputs["$test_file"]="$stderr_content"
-            test_categories["$test_file"]="$test_category"
+            set_test_stdout "$test_file" "$stdout_content"
+            set_test_stderr "$test_file" "$stderr_content"
+            set_test_category "$test_file" "$test_category"
 
             # Note: Temporary files are automatically cleaned up by trap handler
 
@@ -442,22 +562,85 @@ run_tests() {
             log_header "\nSHELL TEST FAILURE ANALYSIS"
 
             # Group failures by category
-            declare -A category_failures
-            for test_file in "${!test_results[@]}"; do
-                if [ "${test_results[$test_file]}" = "FAILED" ]; then
-                    local category="${test_categories[$test_file]}"
-                    category_failures["$category"]+="$test_file "
-                fi
-            done
+            if [ "$use_associative_arrays" = true ]; then
+                declare -A category_failures
+                for test_file in "${!test_results[@]}"; do
+                    if [ "${test_results[$test_file]}" = "FAILED" ]; then
+                        local category="${test_categories[$test_file]}"
+                        category_failures["$category"]+="$test_file "
+                    fi
+                done
 
-            # Report failures by category
-            for category in "${!category_failures[@]}"; do
-                log_header "\n$category Test Failures"
-                for test_file in ${category_failures[$category]}; do
+                # Report failures by category
+                for category in "${!category_failures[@]}"; do
+                    log_header "\n$category Test Failures"
+                    for test_file in ${category_failures[$category]}; do
+                        log_error "\nFailed Test: $test_file"
+
+                        local stdout_content="${test_stdout_outputs[$test_file]}"
+                        local stderr_content="${test_stderr_outputs[$test_file]}"
+
+                        # Analyze stderr first (usually contains error information)
+                        if [ -n "$stderr_content" ]; then
+                            log_warning "Error Output (stderr, last $max_error_lines lines):"
+                            echo "$stderr_content" | tail -n "$max_error_lines" | sed 's/^/  🔥 /'
+
+                            # Look for critical patterns first
+                            local critical_lines
+                            if critical_lines=$(echo "$stderr_content" | grep -E "($critical_patterns)" | head -"$max_error_indicators"); then
+                                log_error "Critical Issues:"
+                                echo "$critical_lines" | sed 's/^/  💥 /'
+                            fi
+
+                            # Look for error patterns
+                            local error_lines
+                            if error_lines=$(echo "$stderr_content" | grep -E "($error_patterns)" | head -"$max_error_indicators"); then
+                                log_warning "Error Indicators:"
+                                echo "$error_lines" | sed 's/^/  🔍 /'
+                            fi
+                        fi
+
+                        # Analyze stdout for test case failures
+                        if [ -n "$stdout_content" ]; then
+                            local failed_cases
+                            if failed_cases=$(echo "$stdout_content" | grep -E "($error_patterns)" | head -"$max_failed_cases"); then
+                                log_warning "Failed Test Cases:"
+                                echo "$failed_cases" | sed 's/^/  📋 /'
+                            fi
+
+                            # Show warnings if any
+                            local warning_lines
+                            if warning_lines=$(echo "$stdout_content" | grep -E "($warning_patterns)" | head -3); then
+                                log_warning "Warnings:"
+                                echo "$warning_lines" | sed 's/^/  ⚠️  /'
+                            fi
+                        fi
+
+                        log_info "$(printf '%.0s-' {1..50})"
+                    done
+                done
+            else
+                # Legacy array implementation for Bash 3.x
+                local failed_test_files=()
+                local i
+                for i in "${!test_files_list[@]}"; do
+                    if [ "${test_results_list[$i]}" = "FAILED" ]; then
+                        failed_test_files+=("${test_files_list[$i]}")
+                    fi
+                done
+
+                # Report failures for legacy arrays
+                for test_file in "${failed_test_files[@]}"; do
                     log_error "\nFailed Test: $test_file"
+                    
+                    local stdout_content
+                    local stderr_content
+                    local category
+                    stdout_content=$(get_test_stdout "$test_file")
+                    stderr_content=$(get_test_stderr "$test_file")
+                    category=$(get_test_category "$test_file")
 
-                    local stdout_content="${test_stdout_outputs[$test_file]}"
-                    local stderr_content="${test_stderr_outputs[$test_file]}"
+                    log_info "Category: $category"
 
                     # Analyze stderr first (usually contains error information)
                     if [ -n "$stderr_content" ]; then
@@ -497,7 +680,7 @@ run_tests() {
 
                     log_info "$(printf '%.0s-' {1..50})"
                 done
-            done
+            fi
 
             log_warning "\nStructured Debugging Guide:"
             log_info '  📝 Re-run specific test: ./${test_file}'

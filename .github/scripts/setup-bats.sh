@@ -18,7 +18,20 @@ if ! command -v bats >/dev/null 2>&1; then
     echo "Installing bats-core..."
     git clone https://github.com/bats-core/bats-core.git /tmp/bats-core
     cd /tmp/bats-core
-    sudo ./install.sh /usr/local
+    
+    # Use modern Bash on macOS if available
+    if [[ "$OSTYPE" == "darwin"* ]] && command -v brew >/dev/null 2>&1; then
+        BASH_PATH=$(brew --prefix 2>/dev/null)/bin/bash
+        if [ -x "$BASH_PATH" ]; then
+            echo "Using modern Bash for installation: $BASH_PATH"
+            sudo "$BASH_PATH" ./install.sh /usr/local
+        else
+            sudo ./install.sh /usr/local
+        fi
+    else
+        sudo ./install.sh /usr/local
+    fi
+    
     cd -
     rm -rf /tmp/bats-core
 fi

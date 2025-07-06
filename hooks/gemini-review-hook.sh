@@ -51,22 +51,9 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     debug_log "TRANSCRIPT" "Transcript file found, extracting last messages"
     LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100 false)
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
-        debug_log "EXIT" "Found REVIEW_COMPLETED, allowing with JSON output"
-        cat <<EOF
-{
-  "decision": "approve",
-  "reason": "Review completed by Gemini - no further action needed"
-}
-EOF
         exit 0
     fi
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_RATE_LIMITED"; then
-        cat <<EOF
-{
-  "decision": "allow",
-  "reason": "Gemini rate limited - allowing with Claude self-review"
-}
-EOF
         exit 0
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
@@ -166,7 +153,7 @@ TEMP_STDERR=$(mktemp)
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
 if command -v timeout >/dev/null 2>&1; then
-    timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+    REVIEW_PROMPT="$REVIEW_PROMPT" timeout ${GEMINI_TIMEOUT}s bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
     GEMINI_EXIT_CODE=$?
 else
     debug_log "GEMINI" "timeout command not available, using manual timeout handling"
@@ -243,7 +230,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 
     # Use shorter timeout for Flash model (it should be faster)
     if command -v timeout >/dev/null 2>&1; then
-        timeout ${GEMINI_TIMEOUT}s bash -c "echo '$REVIEW_PROMPT' | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        REVIEW_PROMPT="$REVIEW_PROMPT" timeout ${GEMINI_TIMEOUT}s bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"

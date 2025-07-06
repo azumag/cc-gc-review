@@ -143,7 +143,11 @@ jobs:
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
       run: |
-        brew install tmux jq coreutils
+        brew install tmux jq coreutils bash
+        
+        # Add modern Bash to PATH and verify
+        echo "BASH_PATH=$(brew --prefix)/bin/bash" >> $GITHUB_ENV
+        echo "$(brew --prefix)/bin/bash --version"
         
     - name: Set up BATS testing environment
       run: |
@@ -154,11 +158,33 @@ jobs:
       run: |
         cd test
         chmod +x setup_test.sh run_tests.sh
-        ./setup_test.sh
+        
+        # Configure for macOS with modern Bash
+        if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          # Ensure we're using modern Bash for tests
+          export PATH="$(brew --prefix)/bin:$PATH"
+          echo "Using Bash version: $(bash --version | head -1)"
+          
+          # Run setup with modern Bash
+          bash ./setup_test.sh
+        else
+          ./setup_test.sh
+        fi
         
     - name: Run basic compatibility tests
       run: |
         cd test
-        # Run a subset of tests to verify compatibility
-        ./run_tests.sh --test "help.*display" --verbose
-        ./run_tests.sh --test "should fail when no session name" --verbose
+        
+        # Configure for macOS with modern Bash
+        if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          export PATH="$(brew --prefix)/bin:$PATH"
+          echo "Running tests with modern Bash: $(bash --version | head -1)"
+          
+          # Run tests with modern Bash
+          bash ./run_tests.sh --test "help.*display" --verbose
+          bash ./run_tests.sh --test "should fail when no session name" --verbose
+        else
+          # Run a subset of tests to verify compatibility
+          ./run_tests.sh --test "help.*display" --verbose
+          ./run_tests.sh --test "should fail when no session name" --verbose
+        fi
