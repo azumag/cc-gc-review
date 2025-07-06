@@ -21,6 +21,7 @@ log_step() { echo -e "\n${YELLOW}$*${NC}"; }
 
 # スクリプトのディレクトリを取得
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+log_info "TEST_DIR: $TEST_DIR"
 cd "$TEST_DIR"
 
 # Global temporary file tracking for cleanup
@@ -308,6 +309,8 @@ run_tests() {
         fi
     else
         log_step "Running all test files..."
+        log_info "Current directory before bats: $(pwd)"
+        log_info "Files in current directory: $(ls -l)"
 
         # Run BATS tests
         if [ -n "$TEST_PATTERN" ]; then

@@ -7,19 +7,16 @@ load 'test_helper/bats-support/load'
 load 'test_helper/bats-assert/load'
 
 setup() {
+    # Get the repository root directory before changing directories
+    REPO_ROOT=$(git rev-parse --show-toplevel)
+    
     # Create temporary directory for test
     TEST_DIR=$(mktemp -d)
     cd "$TEST_DIR"
     
     # Copy the ci-monitor-hook.sh for testing
-    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
-    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
-        cp "$GITHUB_WORKSPACE/hooks/ci-monitor-hook.sh" .
-        cp "$GITHUB_WORKSPACE/hooks/shared-utils.sh" .
-    else
-        cp ../hooks/ci-monitor-hook.sh .
-        cp ../hooks/shared-utils.sh .
-    fi
+    cp "$REPO_ROOT/hooks/ci-monitor-hook.sh" .
+    cp "$REPO_ROOT/hooks/shared-utils.sh" .
     
     # Make gh command available (mock)
     export PATH="$TEST_DIR:$PATH"

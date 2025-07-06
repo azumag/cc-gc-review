@@ -1,0 +1,2 @@
+{"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Test message"}]}}
+{"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "Some work was done.\n\nREVIEW_COMPLETED"}]}}

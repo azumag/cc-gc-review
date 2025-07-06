@@ -1,39 +1,14 @@
 #!/bin/bash
 
+# Source shared utilities
+source "$(dirname "$0")/shared-utils.sh"
+
 # Cleanup function for temporary files
 cleanup() {
-    [ -n "$TEMP_STDOUT" ] && rm -f "$TEMP_STDOUT"
-    [ -n "$TEMP_STDERR" ] && rm -f "$TEMP_STDERR"
+    [ -n "${TEMP_STDOUT:-}" ] && rm -f "$TEMP_STDOUT"
+    [ -n "${TEMP_STDERR:-}" ] && rm -f "$TEMP_STDERR"
     # Clean up debug log files
     rm -f /tmp/gemini-review-hook.log /tmp/gemini-review-error.log /tmp/gemini-review-debug.log
-}
-
-# Function to extract last assistant message from JSONL transcript
-extract_last_assistant_message() {
-    local transcript_path="$1"
-    local line_limit="${2:-0}" # 0 means no limit
-
-    if [ ! -f "$transcript_path" ]; then
-        return 1
-    fi
-
-    local jq_input
-    if [ "$line_limit" -gt 0 ]; then
-        jq_input=$(tail -n "$line_limit" "$transcript_path")
-    else
-        jq_input=$(cat "$transcript_path")
-    fi
-
-    echo "$jq_input" | jq -r --slurp '
-        map(select(.type == "assistant")) |
-        if length > 0 then
-            .[-1].message.content[]? |
-            select(.type == "text") |
-            .text
-        else
-            empty
-        end
-    ' 2>/dev/null
 }
 
 # Debug logging function for intermediate stages
@@ -53,7 +28,7 @@ TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path')
 debug_log "TRANSCRIPT" "Processing transcript path: $TRANSCRIPT_PATH"
 if [ -f "$TRANSCRIPT_PATH" ]; then
     debug_log "TRANSCRIPT" "Transcript file found, extracting last messages"
-    LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100)
+    LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100 false)
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
         debug_log "EXIT" "Found REVIEW_COMPLETED, allowing with JSON output"
         cat <<EOF
@@ -95,7 +70,7 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     # Extract Claude's last summary from transcript (JSONL format)
     # NOTE: This depends on Claude Code's transcript JSONL structure
     # If Claude Code changes its output format, this may need updates
-    CLAUDE_SUMMARY=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 0)
+    CLAUDE_SUMMARY=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 0 true)
 
     # Check if extraction was successful
     if [ -z "$CLAUDE_SUMMARY" ]; then

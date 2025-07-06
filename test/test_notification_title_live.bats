@@ -3,10 +3,13 @@
 # Test title extraction functionality for notification.sh using actual implementation
 
 setup() {
+    # Get the repository root directory before changing directories
+    REPO_ROOT=$(git rev-parse --show-toplevel)
+    
     # Create temporary directory for tests
     TEST_DIR=$(mktemp -d)
     cd "$TEST_DIR"
-    
+
     # Mock the shared-utils.sh dependency
     mkdir -p hooks
     echo '#!/bin/bash' > hooks/shared-utils.sh
@@ -25,12 +28,7 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should extract last meaningful line from summary" {
-    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
-    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
-        source "$GITHUB_WORKSPACE/hooks/notification.sh"
-    else
-        source "../hooks/notification.sh"
-    fi
+    source "$REPO_ROOT/hooks/notification.sh"
     
     local summary="Work Summary: Multiple tasks completed
     
@@ -49,7 +47,7 @@ teardown() {
     if [ -n "${GITHUB_WORKSPACE:-}" ]; then
         source "$GITHUB_WORKSPACE/hooks/notification.sh"
     else
-        source "../hooks/notification.sh"
+        source "../../hooks/notification.sh"
     fi
     
     local summary="1. Initialize the project
@@ -66,7 +64,7 @@ teardown() {
     if [ -n "${GITHUB_WORKSPACE:-}" ]; then
         source "$GITHUB_WORKSPACE/hooks/notification.sh"
     else
-        source "../hooks/notification.sh"
+        source "../../hooks/notification.sh"
     fi
     
     local summary="Work Summary: Fixed Discord notification issues

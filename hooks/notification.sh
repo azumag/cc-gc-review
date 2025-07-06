@@ -66,7 +66,7 @@ extract_task_title() {
     fi
 
     # Extract the last meaningful line as title
-    local title=$(echo "$summary" | grep -v "^$" | tail -n 1)
+    local title=$(echo "$summary" | tail -n 1)
 
     # Clean up and format title - remove Work Summary: prefix
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
@@ -116,10 +116,10 @@ create_discord_payload() {
 
     cat <<EOF
 {
-  "content": "🎉 **${task_title}** 🎉",
+  "content": "**${title_json}**",
   "embeds": [
     {
-      "title": "detail",
+      "title": "info",
       "color": 5763719,
       "fields": [
         {
@@ -130,6 +130,11 @@ create_discord_payload() {
         {
           "name": "Branch",
           "value": ${branch_json},
+          "inline": true
+        },
+        {
+          "name": "Summary",
+          "value": ${work_summary},
           "inline": true
         }
       ],

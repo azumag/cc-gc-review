@@ -243,7 +243,7 @@ Geminiのレビューで改善点がない場合（`REVIEW_COMPLETED`）に、�
 
 プッシュ後にGitHub Actions CIの状態を監視し、CI失敗時にユーザーに通知するオプショナルなスクリプトです。
 
-**前提条件**: このスクリプトは`push-review-complete.sh`が実行され、`REVIEW_COMPLETED && PUSH COMPLETED`のマークが付いた作業のみを対象とします。単独では機能しません。
+**前提条件**: このスクリプトは`push-review-complete.sh`が実行され、`REVIEW_COMPLETED && PUSH_COMPLETED`のマークが付いた作業のみを対象とします。単独では機能しません。
 
 **注意**: この機能はオプションです。CI監視により処理時間が最大5分延長されるため、必要性を慎重に検討してください。
 

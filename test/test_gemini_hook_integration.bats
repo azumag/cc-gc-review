@@ -7,17 +7,16 @@ load 'test_helper/bats-support/load'
 load 'test_helper/bats-assert/load'
 
 setup() {
+    # Get the repository root directory before changing directories
+    REPO_ROOT=$(git rev-parse --show-toplevel)
+    
     # Create temporary directory for test
     TEST_DIR=$(mktemp -d)
     cd "$TEST_DIR"
     
-    # Copy the gemini-review-hook.sh for testing
-    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
-    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
-        cp "$GITHUB_WORKSPACE/hooks/gemini-review-hook.sh" .
-    else
-        cp ../hooks/gemini-review-hook.sh .
-    fi
+    # Copy the gemini-review-hook.sh and shared-utils.sh for testing
+    cp "$REPO_ROOT/hooks/gemini-review-hook.sh" .
+    cp "$REPO_ROOT/hooks/shared-utils.sh" .
     
     # Make gemini command available (mock)
     export PATH="$TEST_DIR:$PATH"
@@ -123,13 +122,14 @@ EOF
     # Should exit successfully without calling Gemini
     assert_success
     
-    # Should exit early and not produce JSON output
-    refute_output --partial '"decision"'
+    # Should produce JSON output indicating completion
+    assert_output --partial '"decision"'
+    assert_output --partial '"decision": "allow"'
     
     # Check debug log
     debug_log="/tmp/gemini-review-debug.log"
     if [ -f "$debug_log" ]; then
-        run grep "Found REVIEW_COMPLETED, exiting" "$debug_log"
+        run grep "Found REVIEW_COMPLETED, allowing with JSON output" "$debug_log"
         assert_success
     fi
 }
@@ -147,13 +147,14 @@ EOF
     # Should exit successfully without calling Gemini
     assert_success
     
-    # Should exit early and not produce JSON output
-    refute_output --partial '"decision"'
+    # Should produce JSON output indicating rate limit
+    assert_output --partial '"decision"'
+    assert_output --partial '"decision": "block"'
     
     # Check debug log
     debug_log="/tmp/gemini-review-debug.log"
     if [ -f "$debug_log" ]; then
-        run grep "Found REVIEW_RATE_LIMITED, exiting" "$debug_log"
+        run grep "Found REVIEW_RATE_LIMITED, blocking with JSON output" "$debug_log"
         assert_success
     fi
 }
