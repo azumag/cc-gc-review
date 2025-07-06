@@ -119,9 +119,12 @@ create_discord_payload() {
     local title_json=$(echo -n "$task_title" | jq -R -s '.')
     local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 
+    # Create properly escaped content field
+    local content_text="**$(echo -n "$task_title" | sed 's/"/\\"/g')**"
+    
     cat <<EOF
 {
-  "content": "**${title_json}**",
+  "content": $(echo -n "$content_text" | jq -R -s '.'),
   "embeds": [
     {
       "title": "info",
@@ -139,7 +142,7 @@ create_discord_payload() {
         },
         {
           "name": "Summary",
-          "value": ${work_summary},
+          "value": ${summary_json},
           "inline": true
         }
       ],
