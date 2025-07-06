@@ -1,2 +1,8 @@
 .ccc.env
 .env
+
+# Debug and test files
+debug_transcript.jsonl
+test_*.jsonl
+*_debug.log
+test-tmp-*
