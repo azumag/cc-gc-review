@@ -55,11 +55,12 @@ check_required_commands() {
         local error_msg="Missing required commands: ${missing_commands[*]}. Please install them before running this script."
         
         # Handle JSON escaping manually if jq is not available - comprehensive escaping
+        local escaped_msg
         if command -v jq >/dev/null 2>&1; then
-            local escaped_msg=$(echo "$error_msg" | jq -Rs .)
+            escaped_msg=$(echo "$error_msg" | jq -Rs .)
         else
             # Comprehensive JSON escaping without jq
-            local escaped_msg=\"$(echo "$error_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g')\"
+            escaped_msg=\"$(echo "$error_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g')\"
         fi
         
         cat <<EOF
@@ -303,7 +304,7 @@ fi
 # For debugging purposes, save outputs to temporary files (only if debug mode is enabled)
 if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
     debug_log "OUTPUT" "Saving final outputs to log files"
-    local log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
+    log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
     echo "$GEMINI_REVIEW" >"$log_dir/gemini-review-hook-$$.log"
     echo "$ERROR_OUTPUT" >"$log_dir/gemini-review-error-$$.log"
     debug_log "OUTPUT" "Final review length: ${#GEMINI_REVIEW} characters"

@@ -25,20 +25,23 @@ load_env() {
 
 # Find Claude Code transcript for current project
 find_transcript_path() {
-    local current_dir=$(pwd)
-    local project_name=$(basename "$current_dir")
+    local current_dir
+    current_dir=$(pwd)
 
     # Search for transcript files in Claude projects directory
     local claude_projects_dir="$HOME/.claude/projects"
 
     if [ -d "$claude_projects_dir" ]; then
         # Look for project directory containing current path
-        local escaped_path=$(echo "$current_dir" | sed 's/[^a-zA-Z0-9]/-/g')
-        local project_dir=$(find "$claude_projects_dir" -type d -name "*$escaped_path*" | head -1)
+        local escaped_path
+        escaped_path=$(echo "$current_dir" | sed 's/[^a-zA-Z0-9]/-/g')
+        local project_dir
+        project_dir=$(find "$claude_projects_dir" -type d -name "*$escaped_path*" | head -1)
 
         if [ -n "$project_dir" ]; then
             # Find the most recent transcript file in the project directory
-            local transcript_file=$(ls -t "$project_dir"/*.jsonl 2>/dev/null | head -1)
+            local transcript_file
+            transcript_file=$(ls -t "$project_dir"/*.jsonl 2>/dev/null | head -1)
             if [ -f "$transcript_file" ]; then
                 echo "$transcript_file"
                 return 0
@@ -46,7 +49,8 @@ find_transcript_path() {
         fi
 
         # Fallback: find the most recent transcript file across all projects
-        local recent_transcript=$(find "$claude_projects_dir" -name "*.jsonl" -type f -exec ls -t {} + 2>/dev/null | head -1)
+        local recent_transcript
+        recent_transcript=$(find "$claude_projects_dir" -name "*.jsonl" -type f -exec ls -t {} + 2>/dev/null | head -1)
         if [ -f "$recent_transcript" ]; then
             echo "$recent_transcript"
             return 0
@@ -66,7 +70,8 @@ extract_task_title() {
     fi
 
     # Extract the last meaningful line as title
-    local title=$(echo "$summary" | tail -n 1)
+    local title
+    title=$(echo "$summary" | tail -n 1)
 
     # Clean up and format title - remove Work Summary: prefix
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
@@ -93,7 +98,7 @@ get_work_summary() {
 
         # If still empty, provide a generic fallback
         if [ -z "$summary" ]; then
-            summary="Work completed in project $(basename $(pwd))"
+            summary="Work completed in project $(basename "$(pwd)")"
         fi
     fi
 
