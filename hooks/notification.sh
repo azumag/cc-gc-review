@@ -65,14 +65,29 @@ extract_task_title() {
         return
     fi
     
-    # Extract first meaningful sentence or phrase (up to 60 characters)
-    local title=$(echo "$summary" | sed 's/[.!?].*//' | head -c 60)
+    # Look for action words and extract the main task
+    local title=""
+    
+    # Try to extract key action phrases
+    if echo "$summary" | grep -q -i "fix\|修正\|解決"; then
+        title=$(echo "$summary" | grep -o -i "[^.]*fix[^.]*\|[^.]*修正[^.]*\|[^.]*解決[^.]*" | head -1 | head -c 50)
+    elif echo "$summary" | grep -q -i "add\|追加\|実装\|implement"; then
+        title=$(echo "$summary" | grep -o -i "[^.]*add[^.]*\|[^.]*追加[^.]*\|[^.]*実装[^.]*\|[^.]*implement[^.]*" | head -1 | head -c 50)
+    elif echo "$summary" | grep -q -i "refactor\|improve\|update\|リファクタ\|改善\|更新"; then
+        title=$(echo "$summary" | grep -o -i "[^.]*refactor[^.]*\|[^.]*improve[^.]*\|[^.]*update[^.]*\|[^.]*リファクタ[^.]*\|[^.]*改善[^.]*\|[^.]*更新[^.]*" | head -1 | head -c 50)
+    else
+        # Fallback: extract first meaningful sentence or phrase
+        title=$(echo "$summary" | sed 's/[.!?].*//' | head -c 50)
+    fi
     
     # Clean up and format title
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
     
+    # Remove bullet points and common prefixes
+    title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//')
+    
     # Add ellipsis if truncated
-    if [ ${#summary} -gt 60 ]; then
+    if [ ${#title} -lt ${#summary} ] && [ ${#title} -gt 40 ]; then
         title="${title}..."
     fi
     
@@ -84,13 +99,32 @@ extract_task_title() {
     echo "$title"
 }
 
-# Get work summary from Claude Code transcript
+# Get comprehensive work summary from Claude Code transcript
 get_work_summary() {
     local transcript_path="$1"
     local summary=""
     
     if [ -f "$transcript_path" ]; then
-        summary=$(extract_last_assistant_message "$transcript_path" 0)
+        # Get recent assistant messages (not just the last one)
+        local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
+        
+        # Extract last 3 assistant messages to get more comprehensive summary
+        local recent_messages=$(tail -n 50 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 3)
+        
+        if [ -n "$recent_messages" ]; then
+            # Combine recent messages with newlines, focusing on substantive content
+            summary=$(echo "$recent_messages" | grep -v "^$" | head -c 800)
+            
+            # If we got multiple messages, format them nicely
+            if [ $(echo "$recent_messages" | wc -l) -gt 1 ]; then
+                summary=$(echo "$recent_messages" | tail -n 2 | sed 's/^/• /' | tr '\n' ' ')
+            fi
+        fi
+        
+        # Fallback to single last message if multiple messages didn't work well
+        if [ -z "$summary" ] || [ ${#summary} -lt 50 ]; then
+            summary=$(extract_last_assistant_message "$transcript_path" 0)
+        fi
         
         # Limit summary to 1000 characters to avoid Discord message limits
         if [ ${#summary} -gt 1000 ]; then
