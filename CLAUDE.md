@@ -1,7 +1,6 @@
 ## Project Structure
 - testは ./test 以下に作成すること
 - 全てのテストは pre-commit と CI に含むこと
-- 発見、修正した点は todo.md に記録する
 
 ## Test Environment Management
 - テストでは mktemp -d を使用して安全な一時ディレクトリを作成

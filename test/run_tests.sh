@@ -168,11 +168,42 @@ run_tests() {
         fi
     else
         echo -e "${YELLOW}Running all test files...${NC}"
+        
+        # Run BATS tests
         if [ -n "$TEST_PATTERN" ]; then
             bats "$bats_options" --filter "$TEST_PATTERN" test_*.bats
         else
             bats "$bats_options" test_*.bats
         fi
+        
+        local bats_exit_code=$?
+        local shell_tests_exit_code=0
+        
+        # Run shell script tests for notification system and gemini hook
+        echo -e "\n${YELLOW}Running notification system tests...${NC}"
+        if ! ./test_notification_core.sh; then
+            echo -e "${RED}✗ Notification core tests failed${NC}"
+            shell_tests_exit_code=1
+        fi
+        
+        echo -e "\n${YELLOW}Running gemini hook integration tests...${NC}"
+        if ! ./test_gemini_content_only.sh; then
+            echo -e "${RED}✗ Gemini hook content tests failed${NC}"
+            shell_tests_exit_code=1
+        fi
+        
+        echo -e "\n${YELLOW}Running notification workflow examples...${NC}"
+        if ! ./test_notification_examples.sh; then
+            echo -e "${RED}✗ Notification examples tests failed${NC}"
+            shell_tests_exit_code=1
+        fi
+        
+        # Return failure if either BATS tests or shell script tests failed
+        if [ "$bats_exit_code" -ne 0 ] || [ "$shell_tests_exit_code" -ne 0 ]; then
+            return 1
+        fi
+        
+        return 0
     fi
 }
 
