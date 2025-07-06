@@ -73,7 +73,7 @@ extract_task_title() {
     title=$(echo "$title" | sed -e 's/^Work Summary:[[:space:]]*//' -e 's/^\*\*Work Summary\*\*:[[:space:]]*//')
     
     # Remove bullet points and common prefixes
-    title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//')
+    title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//' -e 's/^[0-9]*\.[[:space:]]*//')
     
     # Fallback if title is too short or empty
     if [ ${#title} -lt 5 ]; then
@@ -119,7 +119,7 @@ create_discord_payload() {
   "content": "🎉 **${task_title}** 🎉",
   "embeds": [
     {
-      "title": "",
+      "title": ${title_json},
       "color": 5763719,
       "fields": [
         {
@@ -158,26 +158,32 @@ send_discord_notification() {
     local retry_count=0
     
     while [ $retry_count -lt $max_retries ]; do
-        if curl -X POST \
+        local curl_output
+        local curl_exit_code
+        
+        curl_output=$(curl -X POST \
             -H "Content-Type: application/json" \
             -d "$payload" \
             --fail \
-            --silent \
             --show-error \
             --max-time 30 \
-            "$webhook_url"; then
+            "$webhook_url" 2>&1)
+        curl_exit_code=$?
+        
+        if [ $curl_exit_code -eq 0 ]; then
             echo "✅ Discord notification sent successfully"
             return 0
         else
             retry_count=$((retry_count + 1))
             if [ $retry_count -lt $max_retries ]; then
-                echo "⚠️ Discord notification failed, retrying ($retry_count/$max_retries)..." >&2
+                echo "⚠️ Discord notification failed (attempt $retry_count/$max_retries): $curl_output" >&2
                 sleep 2
+            else
+                echo "❌ Discord notification failed after $max_retries attempts. Last error: $curl_output" >&2
             fi
         fi
     done
     
-    echo "❌ Failed to send Discord notification after $max_retries attempts" >&2
     return 1
 }
 
@@ -263,6 +269,9 @@ main() {
         terminal-notifier -title "Claude Code" -message "🎉 ${task_title} (${repo_name}/${branch})" -sound Glass
         # Don't echo completion message here to avoid duplication
     fi
+    
+    # Always exit successfully to avoid breaking the hook chain
+    exit 0
 }
 
 # Execute main function
