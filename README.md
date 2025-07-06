@@ -7,7 +7,9 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 
 このツールは、Claude Codeのstop hookから呼び出され、作業内容をGeminiでレビューし、その結果をClaude Codeに直接表示する自動レビューシステムです。
 
-**注意**: この文書は現在推奨されている`gemini-review-hook.sh`の使用方法を説明しています。tmux連携を使用したフル機能版をお探しの場合は、[レガシー版のドキュメント](deprecated/README-legacy.md)を参照してください。
+**注意**: この文書は現在推奨されている`gemini-review-hook.sh`の使用方法を説明しています。
+
+**tmux連携機能について**: 以前提供していたtmux連携機能は、設定の複雑さとメンテナンスコストを考慮し、現在は非推奨となっています。シンプルで安定した動作を重視し、Claude Codeの標準的なhook機能のみを使用する現在の方式を推奨します。tmux連携が必要な場合（例：tmuxセッション内でのインタラクティブな操作や、複数セッション間での結果共有が必須の場合）は、[レガシー版のドキュメント](deprecated/README-legacy.md)を参照してください。
 
 ## 🚀 クイックスタート
 
@@ -40,28 +42,25 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 ### 2. 必要な環境
 
 - Bash
-- jq (必須)
-- gemini-cli (必須)
-- terminal-notifier (macOS通知用、オプション)
-- libnotify-bin (Ubuntu通知用、オプション)
+- jq
+- Node.js (gemini-cli のインストールに必要)
+- gemini-cli
 
-#### 必須ツールのインストール方法
+#### インストール方法
 
+**jq (JSONパーサー)**
 ```bash
-# jqのインストール
 # macOSの場合
 brew install jq
 # Ubuntuの場合
 sudo apt-get install jq
 ```
 
-#### オプションツールのインストール方法 (通知機能を利用する場合)
-
+**gemini-cli (Gemini AI CLI)**
 ```bash
-# macOSの場合
-brew install terminal-notifier
-# Ubuntuの場合
-sudo apt-get install libnotify-bin
+# 事前にNode.jsがインストールされている必要があります
+# Node.jsのインストール方法については、公式ドキュメント（https://nodejs.org/）を参照してください
+npm install -g gemini-cli
 ```
 
 ## 機能
@@ -83,86 +82,83 @@ sudo apt-get install libnotify-bin
 ### レビュー品質向上
 - **重複レビュー防止**: Claudeの最後の発言に「REVIEW_COMPLETED」「REVIEW_RATE_LIMITED」が含まれる場合はスキップ
 - **Claude Summary の文字数制限**: 1000文字制限でGeminiのトークン制限に対応
-- **賢い切り詰め**: 長文要約時は重要部分（先頭・末尾400文字ずつ）を保持、800文字以下は単純切り詰めで重複回避
+- **要約の切り詰めアルゴリズム**: 1000文字を超える要約は切り詰められます。800文字を超える場合は先頭400文字と末尾400文字を保持し、801文字から1000文字の場合は先頭1000文字を保持します。
 
-## 📚 フル機能版（tmux連携）
+## オプショナルツール
 
-**使い分けガイド**:
-- **シンプル版（上記）**: まずはこちらから試してください。レビュー結果がClaude Codeに直接指示されます
-- **フル機能版（以下）**: より高度な連携が必要な場合（tmux経由でのレビュー送信、カスタムコマンド、レビュー数制限など）
+### notification.sh - Discord通知スクリプト
 
-レビュー結果をtmux経由でClaude Codeに自動送信したい場合は、以下のフル機能版を使用してください。
+作業完了時にDiscordへ通知を送信するオプショナルなスクリプトです。`notification.sh`は`gemini-review-hook.sh`とは独立した機能であり、個別に設定が必要です。
 
-### フル機能版の概要
+#### 必要な環境
 
-このツールは、Claude Codeのstop hookから呼び出され、作業内容をGeminiでレビューし、その結果をtmuxセッションに自動送信することで、継続的なフィードバックを実現します。
+- terminal-notifier (macOS通知用、オプション)
+- libnotify-bin (Ubuntu通知用、オプション)
 
-### フル機能版の特徴
-
-- Claude Codeのstop hookからの自動起動
-- 作業内容の自動抽出とGeminiレビュー
-- tmuxセッションへの自動フィードバック送信
-- ファイル監視による非同期処理
-- 柔軟なオプション設定
-- **セキュリティ強化**: 安全な一時ファイル管理とコマンドインジェクション対策
-- **改善されたレビューカウント**: 送信後カウント、リミット到達時パス＆リセット
-- **包括的テスト**: 堅牢なテストスイートと自動クリーンアップ
-
-### フル機能版の必要な環境
-
-- Bash
-- tmux
-- jq
-- gemini-cli（オプション、なくても動作可能）
-- inotifywait または fswatch（オプション、なければポーリング）
-- timeout コマンド（coreutilsの一部、なければ手動タイムアウト処理）
-## インストール
+**注意**: お使いのOSに合わせていずれか一方をインストールしてください。
 
 ```bash
-git clone https://github.com/yourusername/cc-gc-review.git
-cd cc-gc-review
-chmod +x gemini-review-hook.sh
+# macOSの場合
+brew install terminal-notifier
+
+# Ubuntuの場合
+sudo apt-get install libnotify-bin
 ```
 
-## 使い方
+#### Discord通知の設定
 
-### 基本的な使い方
+**重要**: `notification.sh`は`gemini-review-hook.sh`とは別に、Claude CodeのStop hookに設定する必要があります。
 
-1. 上記のクイックスタートに従って設定を行う
-2. Claude Codeで通常通り作業を行う
-3. 作業が完了すると自動的にGeminiがレビューを実行
-4. レビュー結果がClaude Codeに直接表示される
+1. Claude CodeのStop hookに`notification.sh`を設定
+   ```json
+   {
+     "hooks": {
+       "Stop": [
+         {
+           "matcher": "",
+           "hooks": [
+             {
+               "type": "command",
+               "command": "/path/to/cc-gc-review/notification.sh",
+               "timeout": 30
+             }
+           ]
+         }
+       ]
+     }
+   }
+   ```
+   
+   **注意**: 
+   - `/path/to/cc-gc-review/notification.sh`の部分は、実際にクローンした場所のパスに置き換えてください
+   - `matcher`は条件マッチング用（空文字列は全ての場合にマッチ）
 
-### Discord通知の設定
-
-Discord通知を有効にする場合：
-
-1. プロジェクトのルートディレクトリに`.env`ファイルを作成
+2. プロジェクトのルートディレクトリに`.env`ファイルを作成
    ```bash
    cp .env.example .env
    ```
    
-   **`.env.example`について**: このファイルは設定のテンプレートとして提供されています。必要な環境変数とその説明がコメントとして記載されており、実際の値を入力する際のガイドとして利用できます。
+   `.env.example`を参考に必要な環境変数を設定してください。このファイルは設定のテンプレートとして提供されており、必要な環境変数とその説明がコメントとして記載されています。
    
-2. Discord WebhookのURLを設定：
+3. Discord WebhookのURLを設定：
    ```
    DISCORD_CLAUDE_NOTIFICATION_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_URL
    ```
    
    **⚠️ セキュリティ警告**: `.env`ファイルは機密情報を含むため、Gitにコミットしないでください。このファイルは既に`.gitignore`に追加されています。
 
-3. 作業サマリーの自動抽出について：
-   - `CLAUDE_TRANSCRIPT_PATH`環境変数はClaude Codeのhook環境によって自動的に設定されます。
-   - ユーザーが手動で設定する必要はありません。
-   - `notification.sh`スクリプトは、このパスからClaudeの作業トランスクリプトを読み込み、作業サマリーを抽出するために利用します。
+#### 通知の動作
 
-4. 通知のトリガー：
-   - `notification.sh`スクリプトは、`gemini-review-hook.sh`から自動的に呼び出されます。
-   - したがって、通常はユーザーが手動で実行する必要はありません。
-   - ただし、テスト目的などで手動で実行する場合は、以下のようにします。
-     ```bash
-     ./notification.sh [branch_name]
-     ```
+- `notification.sh`は`gemini-review-hook.sh`とは完全に独立したスクリプトです
+- Claude CodeのStop hookに設定することで、作業完了時に自動実行されます
+- `gemini-review-hook.sh`からは呼び出されません - 別々のhookとして動作します
+- `CLAUDE_TRANSCRIPT_PATH`は自動的に設定され、`notification.sh`がClaudeの作業トランスクリプトからサマリーを抽出します
+- 手動実行する場合：
+  ```bash
+  ./notification.sh [branch_name]
+  ```
+
+#### 通知内容
 
 通知には以下の情報が含まれます：
 - リポジトリ名
