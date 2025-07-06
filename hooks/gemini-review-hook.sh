@@ -67,7 +67,7 @@ PRINCIPLES=$(
 ## 原則
 Gemini のレビューにて改善点を指摘された場合は、その改善点に従って修正せよ。
 Gemini から、これ以上の改善点は特に無しとレビューをもらったときのみ「REVIEW_COMPLETED」とだけ発言せよ。
-Gemini の Rate Limit で制限された場合は 「REVIEW_RATE_LIMITED」とだけ発言せよ。
+REVIEW_RATE_LIMITED は、Gemini のレートリミットに達したことを示す. この場合、Claude 自身が厳正なレビューを行え。
 ----
 EOF
 )
