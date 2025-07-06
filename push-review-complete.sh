@@ -18,7 +18,8 @@ extract_last_assistant_message() {
         jq_input=$(cat "$transcript_path")
     fi
 
-    echo "$jq_input" | jq -r --slurp '
+    local result
+    if ! result=$(echo "$jq_input" | jq -r --slurp '
         map(select(.type == "assistant")) |
         if length > 0 then
             .[-1].message.content[]? |
@@ -27,7 +28,12 @@ extract_last_assistant_message() {
         else
             empty
         end
-    ' 2>/dev/null
+    '); then
+        echo "Error: Failed to parse transcript JSON" >&2
+        return 1
+    fi
+    
+    echo "$result"
 }
 
 INPUT=$(cat)
