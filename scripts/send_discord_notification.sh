@@ -61,9 +61,8 @@ FAILED_JOBS=$(collect_failed_jobs "$TEST_RESULT" "$LINT_RESULT" "$FORMAT_RESULT"
 # Create JSON payload with proper escaping
 create_discord_payload() {
     # Properly escape JSON values
-    # Convert literal \n to actual newlines for proper JSON encoding
-    local failed_jobs_formatted=$(echo -e "${FAILED_JOBS}")
-    local failed_jobs_json=$(echo -n "${failed_jobs_formatted}" | jq -R -s '.')
+    # FAILED_JOBS already contains proper newlines from collect_failed_jobs
+    local failed_jobs_json=$(echo -n "${FAILED_JOBS}" | jq -R -s '.')
     local branch_json=$(echo -n "${BRANCH}" | jq -R -s '.')
     local commit_short="${SHA:0:7}"
     local commit_json=$(echo -n "${commit_short}" | jq -R -s '.')
@@ -154,7 +153,11 @@ send_notification() {
 main() {
     printf "=== Discord Notification Script ===\n"
     printf "Branch: %s\n" "$BRANCH"
-    printf "Failed Jobs:\n%s\n" "$FAILED_JOBS"
+    if [[ -n "$FAILED_JOBS" ]]; then
+        printf "Failed Jobs:\n%s\n" "$FAILED_JOBS"
+    else
+        printf "Failed Jobs: None\n"
+    fi
     printf "Commit: %s\n" "${SHA:0:7}"
     printf "Author: %s\n" "$ACTOR"
     printf "==================================\n"
