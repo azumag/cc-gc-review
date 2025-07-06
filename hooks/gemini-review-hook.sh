@@ -6,7 +6,7 @@ source "$(dirname "$0")/shared-utils.sh"
 # Configuration constants
 readonly CLAUDE_SUMMARY_MAX_LENGTH=1000
 readonly CLAUDE_SUMMARY_PRESERVE_LENGTH=400
-readonly GEMINI_TIMEOUT=120
+readonly GEMINI_TIMEOUT=300
 
 # Cleanup function for temporary files
 cleanup() {
@@ -129,6 +129,7 @@ fi
 REVIEW_PROMPT=$(
     cat <<EOF
 作業内容を厳正にレビューして、改善点を指摘してください。
+以下に Git の情報が提供されない場合は、自ら git diff やコミット確認を行なって把握してください。
 
 ## Git の現在の状態:
 
