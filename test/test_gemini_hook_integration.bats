@@ -124,7 +124,7 @@ EOF
     
     # Should produce JSON output indicating completion
     assert_output --partial '"decision"'
-    assert_output --partial '"decision": "allow"'
+    assert_output --partial '"decision": "approve"'
     
     # Check debug log
     debug_log="/tmp/gemini-review-debug.log"

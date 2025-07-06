@@ -91,7 +91,7 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
         debug_log "EXIT" "Found REVIEW_COMPLETED, allowing with JSON output"
         cat <<EOF
 {
-  "decision": "allow",
+  "decision": "approve",
   "reason": "Review already completed."
 }
 EOF
@@ -318,7 +318,7 @@ DECISION="block" # Default to block
 # Check if review indicates completion or rate limiting
 if [[ $GEMINI_REVIEW == "REVIEW_COMPLETED" ]]; then
     debug_log "DECISION" "Review completed successfully, allowing"
-    DECISION="allow"
+    DECISION="approve"
     COMBINED_REASON=$(echo "Review completed successfully." | jq -Rs .)
 elif [[ $GEMINI_REVIEW == "REVIEW_RATE_LIMITED" ]]; then
     debug_log "DECISION" "Rate limited, blocking with specific message"
@@ -332,7 +332,7 @@ elif [[ -n $GEMINI_REVIEW ]]; then
     COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
 else
     debug_log "DECISION" "No review content, allowing to proceed"
-    DECISION="allow"
+    DECISION="approve"
     COMBINED_REASON=$(echo "No review feedback available." | jq -Rs .)
 fi
 
