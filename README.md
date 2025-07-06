@@ -9,7 +9,52 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 
 **注意**: この文書は現在推奨されている`gemini-review-hook.sh`の使用方法を説明しています。
 
+**プロジェクト構造について**: フックスクリプトは `./hooks` ディレクトリに整理されており、以下のファイルが含まれています：
+- `gemini-review-hook.sh` - Claude Code作業完了時にGeminiでレビューを実行し結果を表示するメインフック
+- `notification.sh` - Claude Code作業完了時にDiscordへ通知メッセージを送信するスクリプト
+- `push-review-complete.sh` - レビュー完了後に未コミット変更を自動的にコミット・プッシュするスクリプト
+- `shared-utils.sh` - トランスクリプト解析などの共通機能を提供するユーティリティライブラリ
+
 **tmux連携機能について**: 以前提供していたtmux連携機能は、設定の複雑さとメンテナンスコストを考慮し、現在は非推奨となっています。シンプルで安定した動作を重視し、Claude Codeの標準的なhook機能のみを使用する現在の方式を推奨します。tmux連携が必要な場合（例：tmuxセッション内でのインタラクティブな操作や、複数セッション間での結果共有が必須の場合）は、[レガシー版のドキュメント](deprecated/README-legacy.md)を参照してください。
+
+## 📋 既存ユーザー向け移行手順
+
+既にこのプロジェクトを使用している場合、以下の手順でスクリプトの新しい構造に移行してください：
+
+1. **リポジトリの更新**
+   ```bash
+   git pull origin main
+   git add hooks/
+   git rm gemini-review-hook.sh notification.sh push-review-complete.sh shared-utils.sh
+   git commit -m "migrate: Move scripts to hooks directory and update documentation"
+   ```
+
+2. **Claude Code設定の更新**
+   `~/.claude/settings.json` のパスを更新：
+   ```json
+   {
+     "hooks": {
+       "Stop": [
+         {
+           "command": "/絶対パス/to/cc-gc-review/hooks/gemini-review-hook.sh"
+         }
+       ]
+     }
+   }
+   ```
+
+3. **Discord通知設定の更新**（使用している場合）
+   ```json
+   {
+     "hooks": {
+       "Stop": [
+         {
+           "command": "/絶対パス/to/cc-gc-review/hooks/notification.sh"
+         }
+       ]
+     }
+   }
+   ```
 
 ## 🚀 クイックスタート
 
@@ -27,7 +72,7 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/cc-gc-review/gemini-review-hook.sh",
+            "command": "/path/to/cc-gc-review/hooks/gemini-review-hook.sh",
             "timeout": 300
           }
         ]
@@ -37,7 +82,7 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 }
 ```
 
-**注意**: `/path/to/cc-gc-review/` の部分は、実際にクローンした場所のパスに置き換えてください。
+**注意**: `/path/to/cc-gc-review/hooks/gemini-review-hook.sh` の部分は、実際にクローンしたリポジトリの `hooks` ディレクトリへの絶対パスに置き換えてください。例：`/Users/username/cc-gc-review/hooks/gemini-review-hook.sh`
 
 ### 2. 必要な環境
 
@@ -119,7 +164,7 @@ sudo apt-get install libnotify-bin
            "hooks": [
              {
                "type": "command",
-               "command": "/path/to/cc-gc-review/notification.sh",
+               "command": "/path/to/cc-gc-review/hooks/notification.sh",
                "timeout": 30
              }
            ]
@@ -130,7 +175,7 @@ sudo apt-get install libnotify-bin
    ```
    
    **注意**: 
-   - `/path/to/cc-gc-review/notification.sh`の部分は、実際にクローンした場所のパスに置き換えてください
+   - `/path/to/cc-gc-review/hooks/notification.sh`の部分は、実際にクローンしたリポジトリの `hooks` ディレクトリへの絶対パスに置き換えてください。例：`/Users/username/cc-gc-review/hooks/notification.sh`
    - `matcher`は条件マッチング用（空文字列は全ての場合にマッチ）
 
 2. プロジェクトのルートディレクトリに`.env`ファイルを作成
@@ -155,7 +200,7 @@ sudo apt-get install libnotify-bin
 - `CLAUDE_TRANSCRIPT_PATH`は自動的に設定され、`notification.sh`がClaudeの作業トランスクリプトからサマリーを抽出します
 - 手動実行する場合：
   ```bash
-  ./notification.sh [branch_name]
+  ./hooks/notification.sh [branch_name]
   ```
 
 #### 通知内容
