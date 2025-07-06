@@ -262,7 +262,7 @@ ESCAPED_PRINCIPLES=$(echo "$PRINCIPLES" | jq -Rs .)
 ESCAPED_REVIEW=$(echo "$GEMINI_REVIEW" | jq -Rs .)
 
 # Dynamic decision logic based on review content
-DECISION="block"  # Default to block
+DECISION="block" # Default to block
 COMBINED_REASON=$(echo -e "$GEMINI_REVIEW\n\n$PRINCIPLES" | jq -Rs .)
 
 # Check if review indicates completion or rate limiting
@@ -290,4 +290,3 @@ cat <<EOF
   "reason": $COMBINED_REASON
 }
 EOF
-

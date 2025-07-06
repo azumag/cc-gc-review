@@ -6,7 +6,7 @@ set -euo pipefail
 # Function to extract last assistant message from JSONL transcript
 extract_last_assistant_message() {
     local transcript_path="$1"
-    local line_limit="${2:-0}" # 0 means no limit
+    local line_limit="${2:-0}"       # 0 means no limit
     local full_content="${3:-false}" # true to get full content, false for last line only
 
     if [ ! -f "$transcript_path" ]; then
@@ -23,7 +23,7 @@ extract_last_assistant_message() {
             echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
             return 1
         fi
-        
+
         if [ -n "$last_text_uuid" ]; then
             # Get the last line of text content from that specific message
             if ! result=$(tail -n "$line_limit" "$transcript_path" | jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' | tail -n 1); then
@@ -40,7 +40,7 @@ extract_last_assistant_message() {
                 echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
                 return 1
             fi
-            
+
             if [ -n "$last_text_uuid" ]; then
                 # Get all text content from that specific message, joined together
                 if ! result=$(cat "$transcript_path" | jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' | tr '\n' ' '); then
@@ -55,7 +55,7 @@ extract_last_assistant_message() {
                 echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
                 return 1
             fi
-            
+
             if [ -n "$last_text_uuid" ]; then
                 # Get the last line of text content from that specific message
                 if ! result=$(cat "$transcript_path" | jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' | tail -1); then
