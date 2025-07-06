@@ -23,6 +23,67 @@ load_env() {
     fi
 }
 
+# Find Claude Code transcript for current project
+find_transcript_path() {
+    local current_dir=$(pwd)
+    local project_name=$(basename "$current_dir")
+    
+    # Search for transcript files in Claude projects directory
+    local claude_projects_dir="$HOME/.claude/projects"
+    
+    if [ -d "$claude_projects_dir" ]; then
+        # Look for project directory containing current path
+        local escaped_path=$(echo "$current_dir" | sed 's/[^a-zA-Z0-9]/-/g')
+        local project_dir=$(find "$claude_projects_dir" -type d -name "*$escaped_path*" | head -1)
+        
+        if [ -n "$project_dir" ]; then
+            # Find the most recent transcript file in the project directory
+            local transcript_file=$(ls -t "$project_dir"/*.jsonl 2>/dev/null | head -1)
+            if [ -f "$transcript_file" ]; then
+                echo "$transcript_file"
+                return 0
+            fi
+        fi
+        
+        # Fallback: find the most recent transcript file across all projects
+        local recent_transcript=$(find "$claude_projects_dir" -name "*.jsonl" -type f -exec ls -t {} + 2>/dev/null | head -1)
+        if [ -f "$recent_transcript" ]; then
+            echo "$recent_transcript"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Extract task title from work summary
+extract_task_title() {
+    local summary="$1"
+    
+    if [ -z "$summary" ]; then
+        echo "Task Completed"
+        return
+    fi
+    
+    # Extract first meaningful sentence or phrase (up to 60 characters)
+    local title=$(echo "$summary" | sed 's/[.!?].*//' | head -c 60)
+    
+    # Clean up and format title
+    title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
+    
+    # Add ellipsis if truncated
+    if [ ${#summary} -gt 60 ]; then
+        title="${title}..."
+    fi
+    
+    # Fallback if title is too short or empty
+    if [ ${#title} -lt 10 ]; then
+        title="Code Changes Completed"
+    fi
+    
+    echo "$title"
+}
+
 # Get work summary from Claude Code transcript
 get_work_summary() {
     local transcript_path="$1"
@@ -52,19 +113,21 @@ create_discord_payload() {
     local branch="$1"
     local repo_name="$2"
     local work_summary="$3"
+    local task_title="$4"
     
     # Escape JSON values properly
     local branch_json=$(echo -n "$branch" | jq -R -s '.')
     local repo_json=$(echo -n "$repo_name" | jq -R -s '.')
     local summary_json=$(echo -n "$work_summary" | jq -R -s '.')
+    local title_json=$(echo -n "$task_title" | jq -R -s '.')
     local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
     
     cat <<EOF
 {
-  "content": "🎉 **Claude Code Task Completed** 🎉",
+  "content": "🎉 **${task_title}** 🎉",
   "embeds": [
     {
-      "title": "Task Completion Summary",
+      "title": ${title_json},
       "color": 5763719,
       "fields": [
         {
@@ -118,6 +181,16 @@ main() {
     # Load environment variables
     load_env
     
+    # Get input from Claude Code stop hook if available
+    local input=""
+    if [ -t 0 ]; then
+        # Running manually (no piped input)
+        input=""
+    else
+        # Running from Claude Code stop hook
+        input=$(cat)
+    fi
+    
     # Get branch name
     local branch
     if [ -z "${1:-}" ]; then
@@ -134,7 +207,17 @@ main() {
     local work_summary=""
     local transcript_path="${CLAUDE_TRANSCRIPT_PATH:-}"
     
-    if [ -n "$transcript_path" ]; then
+    # Extract transcript path from stop hook input if available
+    if [ -n "$input" ]; then
+        transcript_path=$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null || echo "")
+    fi
+    
+    # Try to find transcript automatically if not provided
+    if [ -z "$transcript_path" ]; then
+        transcript_path=$(find_transcript_path)
+    fi
+    
+    if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         work_summary=$(get_work_summary "$transcript_path")
     fi
     
@@ -142,6 +225,9 @@ main() {
     if [ -z "$work_summary" ]; then
         work_summary="Task completed successfully"
     fi
+    
+    # Extract task title from work summary
+    local task_title=$(extract_task_title "$work_summary")
     
     # Check if Discord webhook URL is configured
     if [ -n "${DISCORD_CLAUDE_NOTIFICATION_WEBHOOK_URL:-}" ]; then
@@ -153,10 +239,10 @@ main() {
         
         # Create and send Discord notification
         local payload
-        payload=$(create_discord_payload "$branch" "$repo_name" "$work_summary")
+        payload=$(create_discord_payload "$branch" "$repo_name" "$work_summary" "$task_title")
         
         if send_discord_notification "$DISCORD_CLAUDE_NOTIFICATION_WEBHOOK_URL" "$payload"; then
-            echo "✅ Discord notification sent for ${repo_name}/${branch}"
+            echo "✅ Discord notification sent for ${repo_name}/${branch}: ${task_title}"
         else
             echo "❌ Failed to send Discord notification for ${repo_name}/${branch}" >&2
             exit 1
@@ -168,8 +254,8 @@ main() {
     
     # Also send macOS notification if available
     if command -v terminal-notifier >/dev/null 2>&1; then
-        terminal-notifier -title "Claude Code" -message "Task completed🎉 (${repo_name}/${branch})" -sound Glass
-        echo "✅ macOS notification sent: Task completed for ${repo_name}/${branch}"
+        terminal-notifier -title "Claude Code" -message "🎉 ${task_title} (${repo_name}/${branch})" -sound Glass
+        echo "✅ macOS notification sent: ${task_title} for ${repo_name}/${branch}"
     fi
 }
 
