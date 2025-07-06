@@ -144,7 +144,11 @@ fi
 echo -e "\n8. Comparison with shared-utils.sh approach..."
 
 # Test if both approaches would extract the same content
-source /Users/azumag/work/cc-gc-review/hooks/shared-utils.sh
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    source "$GITHUB_WORKSPACE/hooks/shared-utils.sh"
+else
+    source ../hooks/shared-utils.sh
+fi
 shared_utils_content=$(extract_last_assistant_message "multi_assistant_transcript.jsonl" 0 true)
 
 echo "Gemini hook content length: ${#last_message}"

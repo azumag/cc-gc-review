@@ -25,7 +25,12 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should extract last meaningful line from summary" {
-    source "../hooks/notification.sh"
+    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
+    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
+        source "$GITHUB_WORKSPACE/hooks/notification.sh"
+    else
+        source "../hooks/notification.sh"
+    fi
     
     local summary="Work Summary: Multiple tasks completed
     
@@ -40,7 +45,12 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle numbered lists" {
-    source "../hooks/notification.sh"
+    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
+    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
+        source "$GITHUB_WORKSPACE/hooks/notification.sh"
+    else
+        source "../hooks/notification.sh"
+    fi
     
     local summary="1. Initialize the project
     2. Configure the settings
@@ -52,7 +62,12 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle different from full summary" {
-    source "../hooks/notification.sh"
+    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
+    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
+        source "$GITHUB_WORKSPACE/hooks/notification.sh"
+    else
+        source "../hooks/notification.sh"
+    fi
     
     local summary="Work Summary: Fixed Discord notification issues
 

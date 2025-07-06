@@ -10,8 +10,13 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy notification files and modify them to work in test environment
-cp ../hooks/notification.sh .
-cp ../hooks/shared-utils.sh .
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    cp "$GITHUB_WORKSPACE/hooks/notification.sh" .
+    cp "$GITHUB_WORKSPACE/hooks/shared-utils.sh" .
+else
+    cp ../hooks/notification.sh .
+    cp ../hooks/shared-utils.sh .
+fi
 
 # Modify notification.sh to source shared-utils.sh from current directory
 sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh

@@ -10,8 +10,13 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy notification files
-cp ../hooks/shared-utils.sh .
-cp ../hooks/notification.sh .
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    cp "$GITHUB_WORKSPACE/hooks/shared-utils.sh" .
+    cp "$GITHUB_WORKSPACE/hooks/notification.sh" .
+else
+    cp ../hooks/shared-utils.sh .
+    cp ../hooks/notification.sh .
+fi
 
 # Create test transcript
 cat > test_transcript.jsonl << 'EOF'

@@ -12,7 +12,12 @@ setup() {
     cd "$TEST_DIR"
     
     # Copy the gemini-review-hook.sh for testing
-    cp ../hooks/gemini-review-hook.sh .
+    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
+    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
+        cp "$GITHUB_WORKSPACE/hooks/gemini-review-hook.sh" .
+    else
+        cp ../hooks/gemini-review-hook.sh .
+    fi
     
     # Make gemini command available (mock)
     export PATH="$TEST_DIR:$PATH"

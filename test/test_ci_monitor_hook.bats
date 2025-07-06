@@ -12,8 +12,14 @@ setup() {
     cd "$TEST_DIR"
     
     # Copy the ci-monitor-hook.sh for testing
-    cp ../hooks/ci-monitor-hook.sh .
-    cp ../hooks/shared-utils.sh .
+    # In CI, GITHUB_WORKSPACE points to the repo root; locally we use relative paths
+    if [ -n "${GITHUB_WORKSPACE:-}" ]; then
+        cp "$GITHUB_WORKSPACE/hooks/ci-monitor-hook.sh" .
+        cp "$GITHUB_WORKSPACE/hooks/shared-utils.sh" .
+    else
+        cp ../hooks/ci-monitor-hook.sh .
+        cp ../hooks/shared-utils.sh .
+    fi
     
     # Make gh command available (mock)
     export PATH="$TEST_DIR:$PATH"

@@ -17,7 +17,11 @@ EOF
 
 echo "1. Testing extract_last_assistant_message function..."
 # Source the shared-utils.sh from the hooks directory
-source ../hooks/shared-utils.sh
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    source "$GITHUB_WORKSPACE/hooks/shared-utils.sh"
+else
+    source ../hooks/shared-utils.sh
+fi
 
 # Test the extract function
 extracted_content=$(extract_last_assistant_message "test_transcript.jsonl")
@@ -27,7 +31,11 @@ echo "${extracted_content:0:200}..."
 
 echo -e "\n2. Testing get_work_summary function..."
 # Source notification.sh which contains get_work_summary
-source ../hooks/notification.sh
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    source "$GITHUB_WORKSPACE/hooks/notification.sh"
+else
+    source ../hooks/notification.sh
+fi
 
 work_summary=$(get_work_summary "test_transcript.jsonl")
 echo "✓ Work summary generated:"

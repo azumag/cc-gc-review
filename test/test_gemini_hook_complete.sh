@@ -12,7 +12,11 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy the hook
-cp ../hooks/gemini-review-hook.sh .
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    cp "$GITHUB_WORKSPACE/hooks/gemini-review-hook.sh" .
+else
+    cp ../hooks/gemini-review-hook.sh .
+fi
 
 # Create a mock gemini command that simulates real behavior
 cat > gemini << 'EOF'

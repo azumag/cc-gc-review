@@ -121,7 +121,11 @@ echo "- Has API endpoints: $(if [[ "$content_for_review" == *"API"* || "$content
 echo -e "\n6. Comparison with shared-utils.sh implementation..."
 
 # Compare with shared-utils.sh function
-source ../hooks/shared-utils.sh
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+    source "$GITHUB_WORKSPACE/hooks/shared-utils.sh"
+else
+    source ../hooks/shared-utils.sh
+fi
 shared_utils_result=$(extract_last_assistant_message "realistic_transcript.jsonl" 0 true)
 
 echo "Gemini hook extraction: ${#extracted_content} characters"
