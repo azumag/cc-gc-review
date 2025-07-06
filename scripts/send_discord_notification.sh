@@ -7,8 +7,8 @@ set -euo pipefail
 
 # Check if all required arguments are provided
 if [ $# -ne 11 ]; then
-    echo "Error: Missing required arguments"
-    echo "Usage: $0 [webhook_url] [test_result] [lint_result] [format_result] [integration_result] [release_result] [branch] [sha] [actor] [commit_message] [run_url]"
+    printf "Error: Missing required arguments\n"
+    printf "Usage: %s [webhook_url] [test_result] [lint_result] [format_result] [integration_result] [release_result] [branch] [sha] [actor] [commit_message] [run_url]\n" "$0"
     exit 1
 fi
 
@@ -26,37 +26,27 @@ RUN_URL="${11}"
 
 # Validate webhook URL
 if [[ ! "$WEBHOOK_URL" =~ ^https://discord(app)?\.com/api/webhooks/ ]]; then
-    echo "Error: Invalid Discord webhook URL"
+    printf "Error: Invalid Discord webhook URL\n"
     exit 1
 fi
 
-# Collect failed jobs information
+# Collect failed jobs information using arrays for clean, DRY code
+declare -a failed_jobs_array=()
+declare -a job_results=("$TEST_RESULT" "$LINT_RESULT" "$FORMAT_RESULT" "$INTEGRATION_RESULT" "$RELEASE_RESULT")
+declare -a job_names=("Test Suite" "Linting" "Formatting" "Integration Tests" "Release Process")
+
+for i in "${!job_results[@]}"; do
+    if [[ "${job_results[$i]}" == "failure" ]]; then
+        failed_jobs_array+=("• ${job_names[$i]}")
+    fi
+done
+
+# Join array elements with newlines using printf
 FAILED_JOBS=""
-FAILED_COUNT=0
-if [[ "$TEST_RESULT" == "failure" ]]; then
-  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
-  FAILED_JOBS="${FAILED_JOBS}• Test Suite"
-  ((FAILED_COUNT++))
-fi
-if [[ "$LINT_RESULT" == "failure" ]]; then
-  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
-  FAILED_JOBS="${FAILED_JOBS}• Linting"
-  ((FAILED_COUNT++))
-fi
-if [[ "$FORMAT_RESULT" == "failure" ]]; then
-  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
-  FAILED_JOBS="${FAILED_JOBS}• Formatting"
-  ((FAILED_COUNT++))
-fi
-if [[ "$INTEGRATION_RESULT" == "failure" ]]; then
-  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
-  FAILED_JOBS="${FAILED_JOBS}• Integration Tests"
-  ((FAILED_COUNT++))
-fi
-if [[ "$RELEASE_RESULT" == "failure" ]]; then
-  if [[ $FAILED_COUNT -gt 0 ]]; then FAILED_JOBS="${FAILED_JOBS}\\n"; fi
-  FAILED_JOBS="${FAILED_JOBS}• Release Process"
-  ((FAILED_COUNT++))
+if [[ ${#failed_jobs_array[@]} -gt 0 ]]; then
+    FAILED_JOBS=$(printf "%s\\n" "${failed_jobs_array[@]}")
+    # Remove trailing newline
+    FAILED_JOBS="${FAILED_JOBS%\\n}"
 fi
 
 # Create JSON payload with proper escaping
@@ -134,7 +124,7 @@ send_notification() {
     local payload
     payload=$(create_discord_payload)
     
-    echo "Sending Discord notification..."
+    printf "Sending Discord notification...\n"
     
     if curl -X POST \
         -H "Content-Type: application/json" \
@@ -143,28 +133,28 @@ send_notification() {
         --silent \
         --show-error \
         "$WEBHOOK_URL"; then
-        echo "✅ Discord notification sent successfully"
+        printf "✅ Discord notification sent successfully\n"
         return 0
     else
-        echo "❌ Failed to send Discord notification"
+        printf "❌ Failed to send Discord notification\n"
         return 1
     fi
 }
 
 # Main execution
 main() {
-    echo "=== Discord Notification Script ==="
-    echo "Branch: $BRANCH"
-    echo -e "Failed Jobs: $FAILED_JOBS"
-    echo "Commit: ${SHA:0:7}"
-    echo "Author: $ACTOR"
-    echo "=================================="
+    printf "=== Discord Notification Script ===\n"
+    printf "Branch: %s\n" "$BRANCH"
+    printf "Failed Jobs:\n%s\n" "$FAILED_JOBS"
+    printf "Commit: %s\n" "${SHA:0:7}"
+    printf "Author: %s\n" "$ACTOR"
+    printf "==================================\n"
     
     if send_notification; then
-        echo "Notification process completed successfully"
+        printf "Notification process completed successfully\n"
         exit 0
     else
-        echo "Notification process failed"
+        printf "Notification process failed\n"
         exit 1
     fi
 }
