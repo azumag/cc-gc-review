@@ -105,7 +105,7 @@ setup_ci_environment() {
         export TERM=xterm-256color
 
         # Batsヘルパーライブラリの自動セットアップ
-        if [ ! -d "test_helper/bats-support" ] || [ ! -d "test_helper/bats-assert" ]; then
+        if [ ! -d "test_helper/bats-support" ] || [ ! -d "test_helper/bats-assert" ] || [ ! -d "test_helper/bats-file" ]; then
             echo -e "${YELLOW}Setting up bats helper libraries for CI...${NC}"
             mkdir -p test_helper
 
@@ -118,15 +118,23 @@ setup_ci_environment() {
             if [ ! -d "test_helper/bats-assert" ]; then
                 git clone --depth 1 https://github.com/bats-core/bats-assert.git test_helper/bats-assert
             fi
-        fi
 
-        # Batsヘルパーライブラリのパスを設定
-        SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-        export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_helper/bats-assert:${BATS_LIB_PATH:-}"
+            # bats-fileをダウンロード
+            if [ ! -d "test_helper/bats-file" ]; then
+                git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
+            fi
+        fi
 
         echo -e "${GREEN}✓ CI environment setup completed${NC}"
     fi
 }
+
+# CI環境のセットアップ（早期実行）
+setup_ci_environment
+
+# Batsヘルパーライブラリのパスを設定（CI/ローカル両方で）
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_helper/bats-assert:${SCRIPT_DIR}/test_helper/bats-file:${BATS_LIB_PATH:-}"
 
 # 必要なツールの確認
 if ! command -v bats >/dev/null 2>&1; then
@@ -135,15 +143,9 @@ if ! command -v bats >/dev/null 2>&1; then
     exit 1
 fi
 
-# CI環境のセットアップ
-setup_ci_environment
-
 # テスト実行
 run_tests() {
     local bats_options=""
-
-    # Batsヘルパーライブラリを明示的にソースする
-    # CI環境のワーキングディレクトリがtest/であるため、相対パスで指定
 
     if [ "$VERBOSE" = true ]; then
         bats_options="--verbose-run"
@@ -160,16 +162,16 @@ run_tests() {
         fi
         echo -e "${YELLOW}Running specific test file: $TEST_FILE${NC}"
         if [ -n "$TEST_PATTERN" ]; then
-            bats $bats_options --filter "$TEST_PATTERN" "$TEST_FILE"
+            bats "$bats_options" --filter "$TEST_PATTERN" "$TEST_FILE"
         else
-            bats $bats_options "$TEST_FILE"
+            bats "$bats_options" "$TEST_FILE"
         fi
     else
         echo -e "${YELLOW}Running all test files...${NC}"
         if [ -n "$TEST_PATTERN" ]; then
-            bats $bats_options --filter "$TEST_PATTERN" test_*.bats
+            bats "$bats_options" --filter "$TEST_PATTERN" test_*.bats
         else
-            bats $bats_options test_*.bats
+            bats "$bats_options" test_*.bats
         fi
     fi
 }
@@ -181,7 +183,7 @@ show_results() {
     echo ""
     echo -e "${BLUE}=== Test Results ===${NC}"
 
-    if [ $exit_code -eq 0 ]; then
+    if [ "$exit_code" -eq 0 ]; then
         echo -e "${GREEN}✓ All tests passed!${NC}"
     else
         echo -e "${RED}✗ Some tests failed${NC}"
@@ -193,7 +195,7 @@ show_results() {
         echo "  - Check individual test files for specific failures"
     fi
 
-    return $exit_code
+    return "$exit_code"
 }
 
 # メイン処理

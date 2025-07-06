@@ -17,6 +17,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Install system dependencies
       run: |
@@ -71,6 +73,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Install ShellCheck
       run: |
@@ -83,7 +87,8 @@ jobs:
         
     - name: Run ShellCheck on bats files
       run: |
-        find test -name "*.bats" | xargs shellcheck -S warning
+        # Only check our own bats files, exclude submodule test files
+        find test -name "*.bats" -not -path "test/test_helper/*" | xargs shellcheck -S warning
         
     - name: Check script executability
       run: |
@@ -97,6 +102,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Run bandit security scan
       run: |
@@ -129,6 +136,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: true
       
     - name: Install dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'

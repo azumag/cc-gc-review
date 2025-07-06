@@ -12,11 +12,26 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
     
     - name: Set up environment
       run: |
         sudo apt-get update
         sudo apt-get install -y tmux jq bats
+        
+        # Set BATS_LIB_PATH early for CI environment
+        echo "BATS_LIB_PATH=${{ github.workspace }}/test/test_helper/bats-support:${{ github.workspace }}/test/test_helper/bats-assert:${{ github.workspace }}/test/test_helper/bats-file" >> $GITHUB_ENV
+    
+    - name: Initialize test helper libraries
+      run: |
+        cd test
+        # Ensure all helper libraries are available
+        if [ ! -d "test_helper/bats-file" ]; then
+          git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
+        fi
+        # Verify all helper libraries exist
+        ls -la test_helper/
     
     - name: Make scripts executable
       run: |
@@ -57,6 +72,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
     
     - name: Install shellcheck
       run: |
@@ -67,12 +84,14 @@ jobs:
       run: |
         shellcheck -S warning gemini-review-hook.sh
         shellcheck -S warning test/run_tests.sh
-        shellcheck -S warning test/*.bats
+        # Only check our own bats files, exclude submodule test files
+        find test/ -name "*.bats" -not -path "test/test_helper/*" -exec shellcheck -S warning {} \;
     
     - name: Check for security issues
       run: |
         echo "Checking for potential security issues in shell scripts..."
-        if grep -r "eval\|rm -rf /\|chmod 777" --include="*.sh" --include="*.bash" .; then
+        # Use find to properly exclude test helper directories
+        if find . -name "*.sh" -o -name "*.bash" | grep -v "test/test_helper" | xargs grep -l "eval\|rm -rf /\|chmod 777" 2>/dev/null; then
           echo "WARNING: Potential security issues found!"
           echo "Please review the above matches carefully."
           exit 1
@@ -84,6 +103,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
     
     - name: Install shfmt
       run: |
@@ -102,6 +123,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
     
     - name: Install markdown linter
       run: |
@@ -143,11 +166,26 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
     
     - name: Set up environment
       run: |
         sudo apt-get update
         sudo apt-get install -y tmux jq bats
+        
+        # Set BATS_LIB_PATH early for CI environment
+        echo "BATS_LIB_PATH=${{ github.workspace }}/test/test_helper/bats-support:${{ github.workspace }}/test/test_helper/bats-assert:${{ github.workspace }}/test/test_helper/bats-file" >> $GITHUB_ENV
+    
+    - name: Initialize test helper libraries
+      run: |
+        cd test
+        # Ensure all helper libraries are available
+        if [ ! -d "test_helper/bats-file" ]; then
+          git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
+        fi
+        # Verify all helper libraries exist
+        ls -la test_helper/
     
     - name: Make scripts executable
       run: |
@@ -210,6 +248,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
     
     - name: Create release info
       id: release_info

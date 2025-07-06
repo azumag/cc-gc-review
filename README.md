@@ -1,6 +1,7 @@
 # cc-gc-review
 
-Claude CodeとGeminiをstop hook連携させるサポートツール
+Claude Code と Gemini を stop hook 連携する。
+Claude Code での作業完了時に自動的に Gemini がレビューを実行し、結果を Claude Code に直接指示します。
 
 ## 概要
 
@@ -13,17 +14,28 @@ Claude CodeとGeminiをstop hook連携させるサポートツール
 ### 1. 設定
 
 `~/.claude/settings.json` に以下を追加する：
+(既存設定がある場合は /hooks を使った方が無難)
 
 ```json
 {
   "hooks": {
-    "stop": "/path/to/cc-gc-review/gemini-review-hook.sh"
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/cc-gc-review/gemini-review-hook.sh",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
 **注意**: `/path/to/cc-gc-review/` の部分は、実際にクローンした場所のパスに置き換えてください。
-
 
 ### 2. 必要な環境
 
@@ -52,6 +64,37 @@ Claude CodeとGeminiをstop hook連携させるサポートツール
 - **Claude Summary の文字数制限**: 1000文字制限でGeminiのトークン制限に対応
 - **賢い切り詰め**: 長文要約時は重要部分（先頭・末尾400文字ずつ）を保持、800文字以下は単純切り詰めで重複回避
 
+## 📚 フル機能版（tmux連携）
+
+**使い分けガイド**:
+- **シンプル版（上記）**: まずはこちらから試してください。レビュー結果がClaude Codeに直接指示されます
+- **フル機能版（以下）**: より高度な連携が必要な場合（tmux経由でのレビュー送信、カスタムコマンド、レビュー数制限など）
+
+レビュー結果をtmux経由でClaude Codeに自動送信したい場合は、以下のフル機能版を使用してください。
+
+### フル機能版の概要
+
+このツールは、Claude Codeのstop hookから呼び出され、作業内容をGeminiでレビューし、その結果をtmuxセッションに自動送信することで、継続的なフィードバックを実現します。
+
+### フル機能版の特徴
+
+- Claude Codeのstop hookからの自動起動
+- 作業内容の自動抽出とGeminiレビュー
+- tmuxセッションへの自動フィードバック送信
+- ファイル監視による非同期処理
+- 柔軟なオプション設定
+- **セキュリティ強化**: 安全な一時ファイル管理とコマンドインジェクション対策
+- **改善されたレビューカウント**: 送信後カウント、リミット到達時パス＆リセット
+- **包括的テスト**: 堅牢なテストスイートと自動クリーンアップ
+
+### フル機能版の必要な環境
+
+- Bash
+- tmux
+- jq
+- gemini-cli（オプション、なくても動作可能）
+- inotifywait または fswatch（オプション、なければポーリング）
+- timeout コマンド（coreutilsの一部、なければ手動タイムアウト処理）
 ## インストール
 
 ```bash

@@ -129,7 +129,7 @@ $summary
         else
             log "Warning: 'timeout' command not found. Using manual timeout management."
 
-            echo "$prompt" | gemini $gemini_options >"$temp_stdout" 2>"$temp_stderr" &
+            echo "$prompt" | gemini "$gemini_options" >"$temp_stdout" 2>"$temp_stderr" &
             local gemini_pid=$!
             log "Started gemini process with PID: $gemini_pid"
 
@@ -241,7 +241,7 @@ $summary
             else
                 log "Warning: 'timeout' command not found. Using manual timeout management for Flash model."
 
-                echo "$prompt" | gemini $gemini_options >"$temp_stdout" 2>"$temp_stderr" &
+                echo "$prompt" | gemini "$gemini_options" >"$temp_stdout" 2>"$temp_stderr" &
                 local flash_pid=$!
                 log "Started Flash model process with PID: $flash_pid"
 

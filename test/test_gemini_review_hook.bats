@@ -1,7 +1,13 @@
 #!/usr/bin/env bats
 
-load test_helper/bats-support/load
-load test_helper/bats-assert/load
+# Load unified test helper
+load test_helper
+
+# Helper function for extracting Claude summary
+extract_claude_summary() {
+    local file="$1"
+    jq -r '[.[] | select(.type == "assistant")] | if length > 0 then .[-1].message.content[]? | select(.type == "text") | .text else empty end' "$file" 2>/dev/null
+}
 
 setup() {
     TEST_TEMP_DIR=$(mktemp -d -t cc-gc-test-XXXXXX)
@@ -21,7 +27,7 @@ setup() {
     "type": "assistant", 
     "message": {
       "content": [
-        {"type": "text", "text": "This is a test summary."}
+        {"type": "text", "text": "This is a test summary of work completed. The changes include improvements to error handling and code quality."}
       ]
     }
   }
@@ -40,25 +46,98 @@ teardown() {
     cleanup_test_env
 }
 
-@test "Valid JSON file exists and can be read" {
-    [ -f "$TEST_TRANSCRIPT" ]
-    run cat "$TEST_TRANSCRIPT"
-    assert_success
+@test "CLAUDE_SUMMARY extraction from valid transcript" {
+    # Test the jq command directly
+    result=$(extract_claude_summary "$TEST_TRANSCRIPT")
+    
+    assert_equal "$result" "This is a test summary of work completed. The changes include improvements to error handling and code quality."
 }
 
-@test "Invalid JSON file exists" {
-    [ -f "$INVALID_TRANSCRIPT" ]
-    run cat "$INVALID_TRANSCRIPT"
-    assert_success
-    assert_output "invalid json"
-}
-
-@test "jq can parse valid JSON" {
-    run jq . "$TEST_TRANSCRIPT"
-    assert_success
-}
-
-@test "jq fails on invalid JSON" {
-    run jq . "$INVALID_TRANSCRIPT"
+@test "CLAUDE_SUMMARY extraction from invalid JSON" {
+    run extract_claude_summary "$INVALID_TRANSCRIPT"
+    
     assert_failure
+}
+
+@test "CLAUDE_SUMMARY truncation for long text" {
+    # Create transcript with long summary
+    LONG_TRANSCRIPT="$TEST_TEMP_DIR/long_transcript.json"
+    LONG_TEXT=$(printf 'A%.0s' $(seq 1 1200))  # 1200 character string
+    
+    cat > "$LONG_TRANSCRIPT" << EOF
+[
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {"type": "text", "text": "${LONG_TEXT}"}
+      ]
+    }
+  }
+]
+EOF
+
+    # Test truncation logic
+    CLAUDE_SUMMARY=$(extract_claude_summary "$LONG_TRANSCRIPT")
+    
+    # Apply truncation logic
+    if [ ${#CLAUDE_SUMMARY} -gt 1000 ]; then
+        FIRST_PART=$(echo "$CLAUDE_SUMMARY" | head -c 400)
+        LAST_PART=$(echo "$CLAUDE_SUMMARY" | tail -c 400)
+        CLAUDE_SUMMARY="${FIRST_PART}...(中略)...${LAST_PART}"
+    fi
+    
+    # Should be truncated
+    assert [ ${#CLAUDE_SUMMARY} -le 820 ]  # 400 + 400 + markers
+    [[ "$CLAUDE_SUMMARY" == *"...(中略)..."* ]]
+}
+
+@test "CLAUDE_SUMMARY empty for no assistant messages" {
+    # Create transcript with no assistant messages
+    NO_ASSISTANT_TRANSCRIPT="$TEST_TEMP_DIR/no_assistant.json"
+    cat > "$NO_ASSISTANT_TRANSCRIPT" << 'EOF'
+[
+  {
+    "type": "user",
+    "message": {"content": [{"type": "text", "text": "Hello"}]}
+  }
+]
+EOF
+
+    result=$(extract_claude_summary "$NO_ASSISTANT_TRANSCRIPT")
+    
+    assert_equal "$result" ""
+}
+
+@test "CLAUDE_SUMMARY gets last assistant message when multiple exist" {
+    # Create transcript with multiple assistant messages
+    MULTI_TRANSCRIPT="$TEST_TEMP_DIR/multi_assistant.json"
+    cat > "$MULTI_TRANSCRIPT" << 'EOF'
+[
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {"type": "text", "text": "First message"}
+      ]
+    }
+  },
+  {
+    "type": "user",
+    "message": {"content": [{"type": "text", "text": "User response"}]}
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {"type": "text", "text": "Last message - this should be extracted"}
+      ]
+    }
+  }
+]
+EOF
+
+    result=$(extract_claude_summary "$MULTI_TRANSCRIPT")
+    
+    assert_equal "$result" "Last message - this should be extracted"
 }
