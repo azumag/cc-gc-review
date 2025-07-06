@@ -89,13 +89,15 @@ get_work_summary() {
     local summary=""
     
     if [ -f "$transcript_path" ]; then
-        # Get recent assistant messages to build comprehensive summary
+        # Get all assistant messages from the session for complete context
         local jq_filter='select(.type == "assistant" and .message.content != null) | .message.content[] | select(.type == "text") | .text'
-        local recent_messages=$(tail -n 100 "$transcript_path" | jq -r "$jq_filter" 2>/dev/null | tail -n 5)
+        local all_messages=$(jq -r "$jq_filter" "$transcript_path" 2>/dev/null)
         
-        if [ -n "$recent_messages" ]; then
-            # Join all recent messages with newlines for complete context
-            summary=$(echo "$recent_messages" | grep -v "^$" | tr '\n' '\n\n')
+        if [ -n "$all_messages" ]; then
+            # Include all assistant messages, but filter out very short/duplicate ones
+            summary=$(echo "$all_messages" | grep -v "^$" | awk 'length($0) > 20' | head -20)
+            # Join with double newlines for readability
+            summary=$(echo "$summary" | paste -sd '\n\n' -)
         else
             # Fallback to single last message
             summary=$(extract_last_assistant_message "$transcript_path" 0)
@@ -249,10 +251,10 @@ main() {
         echo "   Add DISCORD_CLAUDE_NOTIFICATION_WEBHOOK_URL to .env to enable Discord notifications"
     fi
     
-    # Also send macOS notification if available
+    # Also send macOS notification if available (no duplicate messaging)
     if command -v terminal-notifier >/dev/null 2>&1; then
         terminal-notifier -title "Claude Code" -message "🎉 ${task_title} (${repo_name}/${branch})" -sound Glass
-        echo "✅ macOS notification sent: ${task_title} for ${repo_name}/${branch}"
+        # Don't echo completion message here to avoid duplication
     fi
 }
 
