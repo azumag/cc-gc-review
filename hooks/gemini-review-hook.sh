@@ -6,7 +6,7 @@ source "$(dirname "$0")/shared-utils.sh"
 # Configuration constants
 readonly CLAUDE_SUMMARY_MAX_LENGTH=1000
 readonly CLAUDE_SUMMARY_PRESERVE_LENGTH=400
-readonly GEMINI_TIMEOUT=30
+readonly GEMINI_TIMEOUT=120
 
 # Cleanup function for temporary files
 cleanup() {
@@ -39,43 +39,6 @@ info_log() { log_message "INFO" "$1" "$2"; }
 warn_log() { log_message "WARN" "$1" "$2"; }
 error_log() { log_message "ERROR" "$1" "$2"; }
 
-# Check for required commands
-check_required_commands() {
-    local missing_commands=()
-    
-    if ! command -v jq >/dev/null 2>&1; then
-        missing_commands+=("jq")
-    fi
-    
-    if ! command -v gemini >/dev/null 2>&1; then
-        missing_commands+=("gemini")
-    fi
-    
-    if [ ${#missing_commands[@]} -gt 0 ]; then
-        local error_msg="Missing required commands: ${missing_commands[*]}. Please install them before running this script."
-        
-        # Handle JSON escaping manually if jq is not available - comprehensive escaping
-        local escaped_msg
-        if command -v jq >/dev/null 2>&1; then
-            escaped_msg=$(echo "$error_msg" | jq -Rs .)
-        else
-            # Comprehensive JSON escaping without jq
-            escaped_msg=\"$(echo "$error_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g')\"
-        fi
-        
-        cat <<EOF
-{
-  "decision": "block",
-  "reason": $escaped_msg
-}
-EOF
-        exit 1
-    fi
-}
-
-# Check required commands are available early
-check_required_commands
-
 # Set trap for cleanup on script exit
 trap cleanup EXIT
 
@@ -89,22 +52,9 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100 false)
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
         debug_log "EXIT" "Found REVIEW_COMPLETED, allowing with JSON output"
-        cat <<EOF
-{
-  "decision": "approve",
-  "reason": "Review already completed."
-}
-EOF
         exit 0
     fi
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_RATE_LIMITED"; then
-        debug_log "EXIT" "Found REVIEW_RATE_LIMITED, blocking with JSON output"
-        cat <<EOF
-{
-  "decision": "block", 
-  "reason": "Review was previously rate limited. Please try again later."
-}
-EOF
         exit 0
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
@@ -178,11 +128,7 @@ fi
 
 REVIEW_PROMPT=$(
     cat <<EOF
-- あなたは厳しく厳格な性格を保つAIとして振る舞ってください
-- 辛口でコメントとレビューを行い、批判的態度で 問題や可能性を発見し、厳密に厳格に判断してください。
-- 決して阿ってはいけません。
-- ただし、正しいことについてはきちんと評価すること。
-- 作業内容をレビューして、改善点や注意点を指摘してください。
+作業内容を厳正にレビューして、改善点を指摘してください。
 
 ## Git の現在の状態:
 
@@ -329,83 +275,15 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
     if [ -n "$ERROR_OUTPUT" ]; then
         ERROR_REASON="$ERROR_REASON. Error: $ERROR_OUTPUT"
     fi
-    
-    cat <<EOF
-{
-  "decision": "block",
-  "reason": $(echo "$ERROR_REASON" | jq -Rs .)
-}
-EOF
     exit 0
 fi
 
-# For debugging purposes, save outputs to temporary files (only if debug mode is enabled)
-if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
-    debug_log "OUTPUT" "Saving final outputs to log files"
-    log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
-    echo "$GEMINI_REVIEW" >"$log_dir/gemini-review-hook-$$.log"
-    echo "$ERROR_OUTPUT" >"$log_dir/gemini-review-error-$$.log"
-    debug_log "OUTPUT" "Final review length: ${#GEMINI_REVIEW} characters"
-fi
-
-# Note: Cleanup is handled by trap on script exit
-
-# Quality validation function
-validate_review_quality() {
-    local review="$1"
-    local min_length=200
-    local review_length=${#review}
-    
-    debug_log "QUALITY" "Review length: $review_length characters"
-    
-    # Check minimum length
-    if [ $review_length -lt $min_length ]; then
-        debug_log "QUALITY" "Review too short ($review_length < $min_length), rejecting"
-        return 1
-    fi
-    
-    # Check for specific technical content
-    local tech_mentions=$(echo "$review" | grep -c -i "コード\|関数\|変数\|エラー\|テスト\|実装\|修正\|改善\|Git\|commit\|line\|行" || true)
-    if [ $tech_mentions -lt 3 ]; then
-        debug_log "QUALITY" "Insufficient technical content ($tech_mentions mentions), rejecting"
-        return 1
-    fi
-    
-    debug_log "QUALITY" "Review quality acceptable"
-    return 0
-}
-
-# Dynamic decision logic based on review content
-DECISION="block" # Default to block
-
 # Check if review indicates completion or rate limiting
-if [[ $GEMINI_REVIEW == "REVIEW_COMPLETED" ]]; then
-    debug_log "DECISION" "Review completed successfully, allowing"
-    DECISION="approve"
-    COMBINED_REASON=$(echo "Review completed successfully." | jq -Rs .)
-elif [[ $GEMINI_REVIEW == "REVIEW_RATE_LIMITED" ]]; then
-    debug_log "DECISION" "Rate limited, blocking with specific message"
-    DECISION="block"
-    COMBINED_REASON=$(echo "Review skipped due to rate limiting. Please try again later." | jq -Rs .)
-elif [[ -n $GEMINI_REVIEW ]]; then
-    debug_log "DECISION" "Review content received, validating quality"
-    
-    # Validate review quality
-    if validate_review_quality "$GEMINI_REVIEW"; then
-        DECISION="block"
-        # Safely combine review and principles, handling potential JSON content in GEMINI_REVIEW
-        COMBINED_CONTENT=$(printf "%s\n\n%s" "$GEMINI_REVIEW" "$PRINCIPLES")
-        COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
-    else
-        # Quality insufficient, provide fallback
-        DECISION="block"
-        COMBINED_REASON=$(echo "Review quality insufficient. Please retry or check system configuration. Original review length: ${#GEMINI_REVIEW} characters." | jq -Rs .)
-    fi
-else
-    debug_log "DECISION" "No review content, allowing to proceed"
-    DECISION="approve"
-    COMBINED_REASON=$(echo "No review feedback available." | jq -Rs .)
-fi
+DECISION="block"
+
+# Safely combine review and principles, handling potential JSON content in GEMINI_REVIEW
+COMBINED_CONTENT=$(printf "%s\n\n%s" "$GEMINI_REVIEW" "$PRINCIPLES")
+COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
 
 cat <<EOF
 {
