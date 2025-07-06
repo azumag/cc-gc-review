@@ -1,45 +1,16 @@
 #!/usr/bin/env bats
 
-load test_helper/bats-support/load.bash
-load test_helper/bats-assert/load.bash
-load test_helper/bats-file/load.bash
+# Load common test helper which loads all BATS libraries
+load test_helper.bash
 
 # test_cc_gc_review.bats - cc-gc-review.sh のテスト (TDD approach)
 
 setup() {
-    # Clean up any leftover test directories first
-    rm -rf ./test-tmp-* 2>/dev/null || true
+    # Use common setup function
+    setup_test_environment
     
-    # テスト用の設定
+    # Additional test-specific setup
     export TEST_SESSION="test-claude-$$"
-    # Use mktemp for safer temporary directory creation
-    export TEST_TMP_DIR
-    TEST_TMP_DIR=$(mktemp -d)
-    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
-    export SCRIPT_DIR
-    
-    # Set up cleanup trap
-    trap 'cleanup_test_env' EXIT INT TERM
-    
-    # モックのgit設定
-    export GIT_AUTHOR_NAME="Test User"
-    export GIT_AUTHOR_EMAIL="test@example.com"
-    export GIT_COMMITTER_NAME="Test User"
-    export GIT_COMMITTER_EMAIL="test@example.com"
-}
-
-cleanup_test_env() {
-    # テスト用tmuxセッションの終了
-    tmux kill-session -t "$TEST_SESSION" 2>/dev/null || true
-    
-    # Clean up test directories
-    if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
-        rm -rf "$TEST_TMP_DIR"
-    fi
-    
-    # テスト用レビューファイルの削除
-    rm -f /tmp/gemini-* 2>/dev/null || true
-    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
 }
 
 teardown() {

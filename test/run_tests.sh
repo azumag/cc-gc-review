@@ -105,7 +105,7 @@ setup_ci_environment() {
         export TERM=xterm-256color
 
         # Batsヘルパーライブラリの自動セットアップ
-        if [ ! -d "test_helper/bats-support" ] || [ ! -d "test_helper/bats-assert" ]; then
+        if [ ! -d "test_helper/bats-support" ] || [ ! -d "test_helper/bats-assert" ] || [ ! -d "test_helper/bats-file" ]; then
             echo -e "${YELLOW}Setting up bats helper libraries for CI...${NC}"
             mkdir -p test_helper
 
@@ -118,15 +118,23 @@ setup_ci_environment() {
             if [ ! -d "test_helper/bats-assert" ]; then
                 git clone --depth 1 https://github.com/bats-core/bats-assert.git test_helper/bats-assert
             fi
-        fi
 
-        # Batsヘルパーライブラリのパスを設定
-        SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-        export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_helper/bats-assert:${BATS_LIB_PATH:-}"
+            # bats-fileをダウンロード
+            if [ ! -d "test_helper/bats-file" ]; then
+                git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
+            fi
+        fi
 
         echo -e "${GREEN}✓ CI environment setup completed${NC}"
     fi
 }
+
+# CI環境のセットアップ（早期実行）
+setup_ci_environment
+
+# Batsヘルパーライブラリのパスを設定（CI/ローカル両方で）
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_helper/bats-assert:${SCRIPT_DIR}/test_helper/bats-file:${BATS_LIB_PATH:-}"
 
 # 必要なツールの確認
 if ! command -v bats >/dev/null 2>&1; then
@@ -135,15 +143,9 @@ if ! command -v bats >/dev/null 2>&1; then
     exit 1
 fi
 
-# CI環境のセットアップ
-setup_ci_environment
-
 # テスト実行
 run_tests() {
     local bats_options=""
-
-    # Batsヘルパーライブラリを明示的にソースする
-    # CI環境のワーキングディレクトリがtest/であるため、相対パスで指定
 
     if [ "$VERBOSE" = true ]; then
         bats_options="--verbose-run"

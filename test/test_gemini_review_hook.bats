@@ -4,6 +4,12 @@ load test_helper/bats-support/load.bash
 load test_helper/bats-assert/load.bash
 load test_helper/bats-file/load.bash
 
+# Helper function for extracting Claude summary
+extract_claude_summary() {
+    local file="$1"
+    jq -r '[.[] | select(.type == "assistant")] | if length > 0 then .[-1].message.content[]? | select(.type == "text") | .text else empty end' "$file" 2>/dev/null
+}
+
 setup() {
     TEST_TEMP_DIR=$(mktemp -d -t cc-gc-test-XXXXXX)
     
@@ -41,36 +47,17 @@ teardown() {
     cleanup_test_env
 }
 
-# Set trap for cleanup on script exit
-trap cleanup_test_env EXIT
+# Trap will be set within each test
 
 @test "CLAUDE_SUMMARY extraction from valid transcript" {
     # Test the jq command directly
-    result=$(jq -r '
-        [.[] | select(.type == "assistant")] |
-        if length > 0 then
-            .[-1].message.content[]? |
-            select(.type == "text") |
-            .text
-        else
-            empty
-        end
-    ' "$TEST_TRANSCRIPT" 2>/dev/null)
+    result=$(extract_claude_summary "$TEST_TRANSCRIPT")
     
     assert_equal "$result" "This is a test summary of work completed. The changes include improvements to error handling and code quality."
 }
 
 @test "CLAUDE_SUMMARY extraction from invalid JSON" {
-    run jq -r '
-        [.[] | select(.type == "assistant")] |
-        if length > 0 then
-            .[-1].message.content[]? |
-            select(.type == "text") |
-            .text
-        else
-            empty
-        end
-    ' "$INVALID_TRANSCRIPT" 2>/dev/null
+    run extract_claude_summary "$INVALID_TRANSCRIPT"
     
     assert_failure
 }
@@ -86,7 +73,7 @@ trap cleanup_test_env EXIT
     "type": "assistant",
     "message": {
       "content": [
-        {"type": "text", "text": "$LONG_TEXT"}
+        {"type": "text", "text": "${LONG_TEXT}"}
       ]
     }
   }
@@ -94,16 +81,7 @@ trap cleanup_test_env EXIT
 EOF
 
     # Test truncation logic
-    CLAUDE_SUMMARY=$(jq -r '
-        [.[] | select(.type == "assistant")] |
-        if length > 0 then
-            .[-1].message.content[]? |
-            select(.type == "text") |
-            .text
-        else
-            empty
-        end
-    ' "$LONG_TRANSCRIPT" 2>/dev/null)
+    CLAUDE_SUMMARY=$(extract_claude_summary "$LONG_TRANSCRIPT")
     
     # Apply truncation logic
     if [ ${#CLAUDE_SUMMARY} -gt 1000 ]; then
@@ -114,7 +92,7 @@ EOF
     
     # Should be truncated
     assert [ ${#CLAUDE_SUMMARY} -le 820 ]  # 400 + 400 + markers
-    assert [[ "$CLAUDE_SUMMARY" == *"...(中略)..."* ]]
+    [[ "$CLAUDE_SUMMARY" == *"...(中略)..."* ]]
 }
 
 @test "CLAUDE_SUMMARY empty for no assistant messages" {
@@ -129,16 +107,7 @@ EOF
 ]
 EOF
 
-    result=$(jq -r '
-        [.[] | select(.type == "assistant")] |
-        if length > 0 then
-            .[-1].message.content[]? |
-            select(.type == "text") |
-            .text
-        else
-            empty
-        end
-    ' "$NO_ASSISTANT_TRANSCRIPT" 2>/dev/null)
+    result=$(extract_claude_summary "$NO_ASSISTANT_TRANSCRIPT")
     
     assert_equal "$result" ""
 }
@@ -171,16 +140,7 @@ EOF
 ]
 EOF
 
-    result=$(jq -r '
-        [.[] | select(.type == "assistant")] |
-        if length > 0 then
-            .[-1].message.content[]? |
-            select(.type == "text") |
-            .text
-        else
-            empty
-        end
-    ' "$MULTI_TRANSCRIPT" 2>/dev/null)
+    result=$(extract_claude_summary "$MULTI_TRANSCRIPT")
     
     assert_equal "$result" "Last message - this should be extracted"
 }

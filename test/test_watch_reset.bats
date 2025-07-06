@@ -1,22 +1,17 @@
 #!/usr/bin/env bats
 
-load test_helper/bats-support/load.bash
-load test_helper/bats-assert/load.bash
-load test_helper/bats-file/load.bash
+# Load common test helper which loads all BATS libraries
+load test_helper.bash
 
 # test_watch_reset.bats - Tests for watch functions and reset behavior
 
-# Load bats helper libraries
-# In CI, the working directory is already in test/, so we need to handle both cases
-if [[ -f "test_helper/bats-support/load.bash" ]]; then
-    source "test_helper/bats-support/load.bash"
-    source "test_helper/bats-assert/load.bash"
-elif [[ -f "../test/test_helper/bats-support/load.bash" ]]; then
-    source "../test/test_helper/bats-support/load.bash"
-    source "../test/test_helper/bats-assert/load.bash"
-fi
-
 setup() {
+    # Use common setup function
+    setup_test_environment
+    
+    # Additional test-specific setup
+    export TEST_SESSION="test-watch-$$"
+    
     # Clean up any leftover test directories first
     rm -rf ./test-tmp-* 2>/dev/null || true
     

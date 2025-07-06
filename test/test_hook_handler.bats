@@ -1,27 +1,13 @@
 #!/usr/bin/env bats
 
-load test_helper/bats-support/load.bash
-load test_helper/bats-assert/load.bash
-load test_helper/bats-file/load.bash
+# Load common test helper which loads all BATS libraries
+load test_helper.bash
 
 # test_hook_handler.bats - hook-handler.sh のテスト (TDD approach)
 
 setup() {
-    # Clean up any leftover test directories first
-    rm -rf ./test-tmp-* 2>/dev/null || true
-    
-    # テスト用の設定
-    export TEST_TMP_DIR
-    TEST_TMP_DIR=$(mktemp -d)
-    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")"/.. && pwd)"
-    export SCRIPT_DIR
-    
-    # Set up cleanup trap
-    trap 'cleanup_test_env' EXIT INT TERM
-    
-    # 環境変数の設定
-    export CC_GC_REVIEW_VERBOSE="true"
-    export CC_GC_REVIEW_TMP_DIR="$TEST_TMP_DIR"
+    # Use common setup function
+    setup_test_environment
     
     # テスト用のトランスクリプトファイル作成
     export TEST_TRANSCRIPT="$TEST_TMP_DIR/test-transcript.jsonl"
@@ -29,20 +15,6 @@ setup() {
 {"type": "user", "message": {"content": [{"text": "テストリクエスト"}]}}
 {"type": "assistant", "message": {"content": [{"text": "テスト作業の内容です。ファイルを作成しました。"}]}}
 EOF
-}
-
-cleanup_test_env() {
-    # Clean up test directories
-    if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
-        rm -rf "$TEST_TMP_DIR"
-    fi
-    
-    # Clean up any remaining test files
-    rm -f /tmp/gemini-* 2>/dev/null || true
-    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
-    
-    # Clean up environment variables
-    unset CC_GC_REVIEW_VERBOSE CC_GC_REVIEW_TMP_DIR CC_GC_REVIEW_WATCH_FILE
 }
 
 teardown() {

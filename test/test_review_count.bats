@@ -1,70 +1,27 @@
 #!/usr/bin/env bats
 
-load test_helper/bats-support/load.bash
-load test_helper/bats-assert/load.bash
-load test_helper/bats-file/load.bash
+# Load common test helper which loads all BATS libraries
+load test_helper.bash
 
 # test_review_count.bats - Review count functionality tests
 
-# Load bats helper libraries
-# In CI, the working directory is already in test/, so we need to handle both cases
-if [[ -f "test_helper/bats-support/load.bash" ]]; then
-    source "test_helper/bats-support/load.bash"
-    source "test_helper/bats-assert/load.bash"
-elif [[ -f "../test/test_helper/bats-support/load.bash" ]]; then
-    source "../test/test_helper/bats-support/load.bash"
-    source "../test/test_helper/bats-assert/load.bash"
-fi
-
 setup() {
-    # Clean up any leftover test directories first
-    rm -rf ./test-tmp-* 2>/dev/null || true
+    # Use common setup function
+    setup_test_environment
     
-    # Test configuration
+    # Additional test-specific setup
     export TEST_SESSION="test-count-$$"
-    # Use mktemp for safer temporary directory creation
-    export TEST_TMP_DIR
-    TEST_TMP_DIR=$(mktemp -d)
-    SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")"/.. && pwd)"
-    export SCRIPT_DIR
     export TEST_REVIEW_FILE="$TEST_TMP_DIR/gemini-review"
     export TEST_COUNT_FILE="$TEST_TMP_DIR/cc-gc-review-count"
     
-    # Set up cleanup trap
-    trap 'cleanup_test_env' EXIT INT TERM
-    
-    # CI環境対応
+    # CI環境での特別なタイムアウト設定
     if [ "${CI:-false}" = "true" ]; then
-        export TMUX_TMPDIR=/tmp
-        export TERM=xterm-256color
-        # CI環境での長めの待機時間
         export BATS_TEST_TIMEOUT=30
     fi
-    
-    # Mock git settings
     export GIT_AUTHOR_NAME="Test User"
     export GIT_AUTHOR_EMAIL="test@example.com"
     export GIT_COMMITTER_NAME="Test User"
     export GIT_COMMITTER_EMAIL="test@example.com"
-}
-
-cleanup_test_env() {
-    # Clean up tmux session with retry
-    local retry_count=0
-    while [ $retry_count -lt 3 ] && tmux has-session -t "$TEST_SESSION" 2>/dev/null; do
-        tmux kill-session -t "$TEST_SESSION" 2>/dev/null || true
-        sleep 1
-        ((retry_count++))
-    done
-    
-    # Clean up test directories
-    if [[ -n "$TEST_TMP_DIR" && -d "$TEST_TMP_DIR" ]]; then
-        rm -rf "$TEST_TMP_DIR"
-    fi
-    
-    # Clean up any remaining test files
-    rm -f /tmp/gemini-* 2>/dev/null || true
-    rm -f /tmp/cc-gc-review-* 2>/dev/null || true
 }
 
 teardown() {
