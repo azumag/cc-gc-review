@@ -13,32 +13,16 @@ extract_last_assistant_message() {
         return 1
     fi
 
+    local jq_filter='.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text'
     local result
+    
     if [ "$line_limit" -gt 0 ]; then
-        if ! result=$(tail -n "$line_limit" "$transcript_path" | jq -r --slurp '
-            map(select(.type == "assistant")) |
-            if length > 0 then
-                .[-1].message.content[]? |
-                select(.type == "text") |
-                .text
-            else
-                empty
-            end
-        '); then
+        if ! result=$(tail -n "$line_limit" "$transcript_path" | jq -r "$jq_filter" | tail -n 1); then
             echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
             return 1
         fi
     else
-        if ! result=$(jq -r --slurp '
-            map(select(.type == "assistant")) |
-            if length > 0 then
-                .[-1].message.content[]? |
-                select(.type == "text") |
-                .text
-            else
-                empty
-            end
-        ' "$transcript_path"); then
+        if ! result=$(jq -r "$jq_filter" "$transcript_path" | tail -n 1); then
             echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
             return 1
         fi
