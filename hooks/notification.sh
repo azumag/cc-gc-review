@@ -67,7 +67,7 @@ find_transcript_path() {
     return 1
 }
 
-# Extract task title from last line of work summary
+# Extract task title from work summary
 extract_task_title() {
     local summary="$1"
 
@@ -76,19 +76,40 @@ extract_task_title() {
         return
     fi
 
-    # Extract the last meaningful line as title
-    local title
-    title=$(echo "$summary" | tail -n 1)
+    # Try multiple strategies to find a meaningful title
+    local title=""
+    
+    # Strategy 1: Look for lines starting with common task indicators
+    title=$(echo "$summary" | grep -E "^(fix|add|update|implement|create|remove|refactor|improve|resolve|complete)" -i | head -n 1)
+    
+    # Strategy 2: Look for lines with task-like patterns (avoid generic headers)
+    if [ -z "$title" ] || [ ${#title} -lt 10 ]; then
+        title=$(echo "$summary" | grep -v -E "^(##|Work Summary|作業報告|Summary)" | grep -E "^[^a-z]*[A-Z]" | head -n 1)
+    fi
+    
+    # Strategy 3: Get the last non-empty line (original behavior)
+    if [ -z "$title" ] || [ ${#title} -lt 5 ]; then
+        title=$(echo "$summary" | grep -v "^[[:space:]]*$" | tail -n 1)
+    fi
+    
+    # Strategy 4: Use first substantial line if others fail
+    if [ -z "$title" ] || [ ${#title} -lt 5 ]; then
+        title=$(echo "$summary" | grep -v -E "^(##|Work Summary|作業報告|Summary|^[[:space:]]*$)" | head -n 1)
+    fi
 
-    # Clean up and format title - remove Work Summary: prefix
+    # Clean up and format title
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
     title=$(echo "$title" | sed -e 's/^Work Summary:[[:space:]]*//' -e 's/^\*\*Work Summary\*\*:[[:space:]]*//')
+    title=$(echo "$title" | sed -e 's/^作業報告:[[:space:]]*//' -e 's/^\*\*作業報告\*\*:[[:space:]]*//')
 
     # Remove bullet points and common prefixes
     title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//' -e 's/^[0-9]*\.[[:space:]]*//')
+    
+    # Remove markdown formatting
+    title=$(echo "$title" | sed -e 's/\*\*//g' -e 's/__//g' -e 's/`//g')
 
-    # Fallback if title is too short or empty
-    if [ ${#title} -lt 5 ]; then
+    # Fallback if title is still too short or empty
+    if [ -z "$title" ] || [ ${#title} -lt 5 ]; then
         title="Task Completed"
     fi
 

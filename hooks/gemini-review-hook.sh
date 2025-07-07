@@ -24,6 +24,9 @@ source "$(dirname "$0")/shared-utils.sh"
 readonly CLAUDE_SUMMARY_MAX_LENGTH=1000
 readonly CLAUDE_SUMMARY_PRESERVE_LENGTH=400
 readonly GEMINI_TIMEOUT=300
+readonly RATE_LIMITED_RESPONSE="REVIEW_RATE_LIMITED"
+readonly TIMEOUT_EXIT_CODE=124
+readonly REVIEW_COMPLETED_MARKER="REVIEW_COMPLETED"
 
 # Debug log configuration (only when debug mode is enabled)
 if [ "$DEBUG_MODE" = "true" ]; then
@@ -81,6 +84,73 @@ info_log() { log_message "INFO" "$1" "$2"; }
 warn_log() { log_message "WARN" "$1" "$2"; }
 error_log() { log_message "ERROR" "$1" "$2"; }
 
+# Run Gemini with timeout handling and error management
+run_gemini() {
+    local model_args="$1"  # e.g., "" for Pro or "--model=gemini-2.5-flash" for Flash
+    local log_prefix="$2"  # e.g., "GEMINI" or "FLASH"
+    local prompt="$3"      # Review prompt to send
+    
+    debug_log "$log_prefix" "Starting Gemini execution with model args: $model_args"
+    
+    # Execute with timeout if available
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$prompt\" | gemini -s -y ${model_args}" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        return $?
+    else
+        debug_log "$log_prefix" "timeout command not available, using manual timeout handling"
+        >&2 echo "[gemini-review-hook] Warning: timeout command not available for $log_prefix model, using manual timeout handling"
+        
+        # Debug logging of prompt if enabled
+        if [ "$DEBUG_MODE" = "true" ]; then
+            echo "$prompt" >> "$LOG_FILE"
+        fi
+        
+        # Manual timeout management
+        echo "$prompt" | gemini -s -y $model_args >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
+        local gemini_pid=$!
+        
+        local wait_count=0
+        local exit_code=$TIMEOUT_EXIT_CODE
+        while [[ $wait_count -lt $GEMINI_TIMEOUT ]]; do
+            if ! kill -0 $gemini_pid 2>/dev/null; then
+                wait $gemini_pid
+                exit_code=$?
+                break
+            fi
+            sleep 1
+            ((wait_count++))
+        done
+        
+        # Kill if timed out
+        if [[ $wait_count -ge $GEMINI_TIMEOUT ]]; then
+            kill -TERM $gemini_pid 2>/dev/null || true
+            sleep 2
+            kill -KILL $gemini_pid 2>/dev/null || true
+            wait $gemini_pid 2>/dev/null || true
+            exit_code=$TIMEOUT_EXIT_CODE
+        fi
+        
+        return $exit_code
+    fi
+}
+
+# Provide user-friendly error messages with actionable instructions
+get_user_friendly_error() {
+    local error_content="$1"
+    
+    if [[ "$error_content" =~ "command not found" ]]; then
+        echo "gemini-cliがインストールされていません。インストールするには: npm install -g gemini-cli"
+    elif [[ "$error_content" =~ "authentication" ]] || [[ "$error_content" =~ "auth" ]]; then
+        echo "認証エラー（gemini-cliの認証が必要です）。認証するには: gemini auth"
+    elif [[ "$error_content" =~ "Resource has been exhausted" ]] || [[ "$error_content" =~ "check quota" ]] || [[ "$error_content" =~ "RESOURCE_EXHAUSTED" ]]; then
+        echo "クォータ制限エラー（APIの使用制限に達しました）。しばらく時間をおいてから再試行してください"
+    elif [[ "$error_content" =~ "network" ]] || [[ "$error_content" =~ "connection" ]]; then
+        echo "ネットワークエラー。インターネット接続を確認してください"
+    else
+        echo "Geminiサービスエラー: ${error_content:0:100}"
+    fi
+}
+
 # Set trap for cleanup on script exit
 trap cleanup EXIT
 
@@ -93,10 +163,10 @@ debug_log "TRANSCRIPT" "Processing transcript path: $TRANSCRIPT_PATH"
 if [ -f "$TRANSCRIPT_PATH" ]; then
     debug_log "TRANSCRIPT" "Transcript file found, extracting last messages"
     LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100 false)
-    if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
+    if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$REVIEW_COMPLETED_MARKER"; then
         exit 0
     fi
-    if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_RATE_LIMITED"; then
+    if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$RATE_LIMITED_RESPONSE"; then
         exit 0
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
@@ -189,46 +259,13 @@ EOF
 )
 
 # Try Pro model first with timeout and process monitoring
-debug_log "GEMINI" "Starting Gemini Pro model execution"
 TEMP_STDOUT=$(mktemp)
 TEMP_STDERR=$(mktemp)
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
-if command -v timeout >/dev/null 2>&1; then
-    timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
-    GEMINI_EXIT_CODE=$?
-else
-    debug_log "GEMINI" "timeout command not available, using manual timeout handling"
-    >&2 echo "[gemini-review-hook] Warning: timeout command not available, using manual timeout handling"
-
-    echo "$REVIEW_PROMPT" >> "$LOG_FILE"
-
-    # Manual timeout management
-    echo "$REVIEW_PROMPT" | gemini -s -y >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
-    GEMINI_PID=$!
-
-    # Wait for process with timeout
-    WAIT_COUNT=0
-    GEMINI_EXIT_CODE=124 # default timeout
-    while [[ $WAIT_COUNT -lt $GEMINI_TIMEOUT ]]; do
-        if ! kill -0 $GEMINI_PID 2>/dev/null; then
-            wait $GEMINI_PID
-            GEMINI_EXIT_CODE=$?
-            break
-        fi
-        sleep 1
-        ((WAIT_COUNT++))
-    done
-
-    # Kill if timed out
-    if [[ $WAIT_COUNT -ge $GEMINI_TIMEOUT ]]; then
-        kill -TERM $GEMINI_PID 2>/dev/null || true
-        sleep 2
-        kill -KILL $GEMINI_PID 2>/dev/null || true
-        wait $GEMINI_PID 2>/dev/null || true
-        GEMINI_EXIT_CODE=124
-    fi
-fi
+# Run Gemini Pro model
+GEMINI_EXIT_CODE=0
+run_gemini "" "GEMINI" "$REVIEW_PROMPT" || GEMINI_EXIT_CODE=$?
 
 GEMINI_REVIEW=$(cat "$TEMP_STDOUT" 2>/dev/null)
 ERROR_OUTPUT=$(cat "$TEMP_STDERR" 2>/dev/null)
@@ -237,9 +274,9 @@ debug_log "GEMINI" "Review length: ${#GEMINI_REVIEW} characters, Error length: $
 
 # Check for rate limit errors
 IS_RATE_LIMIT=false
-if [[ $GEMINI_EXIT_CODE -eq 124 ]]; then
+if [[ $GEMINI_EXIT_CODE -eq $TIMEOUT_EXIT_CODE ]]; then
     # Timeout - treat as rate limit
-    warn_log "RATE_LIMIT" "Timeout detected (exit code 124), treating as rate limit"
+    warn_log "RATE_LIMIT" "Timeout detected (exit code $TIMEOUT_EXIT_CODE), treating as rate limit"
     IS_RATE_LIMIT=true
 elif [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z $GEMINI_REVIEW ]]; then
     debug_log "RATE_LIMIT" "Checking error patterns for rate limit detection"
@@ -275,42 +312,15 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
     debug_log "FLASH" "Rate limit detected, switching to Flash model"
     >&2 echo "[gemini-review-hook] Rate limit detected, switching to Flash model..."
 
-    # Use shorter timeout for Flash model (it should be faster)
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
-        GEMINI_EXIT_CODE=$?
-    else
-        debug_log "FLASH" "timeout command not available, using manual timeout handling"
-        >&2 echo "[gemini-review-hook] Warning: timeout command not available for Flash model, using manual timeout handling"
-        echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
-        FLASH_PID=$!
-
-        WAIT_COUNT=0
-        GEMINI_EXIT_CODE=124
-        while [[ $WAIT_COUNT -lt $GEMINI_TIMEOUT ]]; do
-            if ! kill -0 $FLASH_PID 2>/dev/null; then
-                wait $FLASH_PID
-                GEMINI_EXIT_CODE=$?
-                break
-            fi
-            sleep 1
-            ((WAIT_COUNT++))
-        done
-
-        if [[ $WAIT_COUNT -ge $GEMINI_TIMEOUT ]]; then
-            kill -TERM $FLASH_PID 2>/dev/null || true
-            sleep 2
-            kill -KILL $FLASH_PID 2>/dev/null || true
-            wait $FLASH_PID 2>/dev/null || true
-            GEMINI_EXIT_CODE=124
-        fi
-    fi
+    # Run Gemini Flash model
+    GEMINI_EXIT_CODE=0
+    run_gemini "--model=gemini-2.5-flash" "FLASH" "$REVIEW_PROMPT" || GEMINI_EXIT_CODE=$?
 
     GEMINI_REVIEW=$(cat "$TEMP_STDOUT" 2>/dev/null)
     debug_log "FLASH" "Flash model execution completed with exit code: $GEMINI_EXIT_CODE"
     if [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z $GEMINI_REVIEW ]]; then
-        debug_log "FLASH" "Flash model also failed, setting REVIEW_RATE_LIMITED"
-        GEMINI_REVIEW="REVIEW_RATE_LIMITED"
+        debug_log "FLASH" "Flash model also failed, setting $RATE_LIMITED_RESPONSE"
+        GEMINI_REVIEW="$RATE_LIMITED_RESPONSE"
     else
         debug_log "FLASH" "Flash model succeeded, review length: ${#GEMINI_REVIEW} characters"
     fi
@@ -339,21 +349,13 @@ if [[ -z "$GEMINI_REVIEW" ]]; then
         FAILURE_CAUSE="一時ファイル作成に失敗"
         error_log "REVIEW" "Temporary stderr file not found: $TEMP_STDERR"
     elif [[ -s "$TEMP_STDERR" ]]; then
-        # Error output exists, check for common patterns
+        # Error output exists, use user-friendly error messages
         ERROR_CONTENT=$(cat "$TEMP_STDERR" 2>/dev/null)
-        if [[ "$ERROR_CONTENT" =~ "command not found" ]]; then
-            FAILURE_CAUSE="gemini-cliがインストールされていません"
-        elif [[ "$ERROR_CONTENT" =~ "authentication" ]] || [[ "$ERROR_CONTENT" =~ "auth" ]]; then
-            FAILURE_CAUSE="認証エラー（gemini-cliの認証が必要です）"
-        elif [[ "$ERROR_CONTENT" =~ "network" ]] || [[ "$ERROR_CONTENT" =~ "connection" ]]; then
-            FAILURE_CAUSE="ネットワークエラー"
-        else
-            FAILURE_CAUSE="Geminiサービスエラー: ${ERROR_CONTENT:0:100}"
-        fi
+        FAILURE_CAUSE=$(get_user_friendly_error "$ERROR_CONTENT")
         error_log "REVIEW" "Error output detected: $ERROR_CONTENT"
-    elif [[ $GEMINI_EXIT_CODE -eq 124 ]]; then
+    elif [[ $GEMINI_EXIT_CODE -eq $TIMEOUT_EXIT_CODE ]]; then
         FAILURE_CAUSE="タイムアウト"
-        error_log "REVIEW" "Timeout detected (exit code 124)"
+        error_log "REVIEW" "Timeout detected (exit code $TIMEOUT_EXIT_CODE)"
     elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
         FAILURE_CAUSE="Gemini実行エラー (終了コード: $GEMINI_EXIT_CODE)"
         error_log "REVIEW" "Non-zero exit code: $GEMINI_EXIT_CODE"

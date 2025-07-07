@@ -56,7 +56,7 @@ extract_last_assistant_message() {
 
             if [ -n "$last_text_uuid" ]; then
                 # Get all text content from that specific message, joined together
-                if ! result=$(jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' < "$transcript_path" | tr '\n' ' '); then
+                if ! result=$(jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' < "$transcript_path"); then
                     echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
                     return 1
                 fi
