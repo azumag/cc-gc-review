@@ -340,17 +340,35 @@ GIT_STATUS=""
 GIT_DIFF=""
 GIT_LOG=""
 
+# Git diff size limit to prevent prompt overflow (characters)
+readonly GIT_DIFF_MAX_SIZE=3000
+
 if git rev-parse --git-dir >/dev/null 2>&1; then
     debug_log "GIT" "Gathering git information for review context"
 
     # Get git status
     GIT_STATUS=$(git status --porcelain 2>/dev/null || echo "Unable to get git status")
 
-    # Get recent changes (staged and unstaged)
-    GIT_DIFF=$(git diff HEAD 2>/dev/null || echo "Unable to get git diff")
-    if [ -z "$GIT_DIFF" ]; then
+    # Get recent changes (staged and unstaged) with size limit
+    GIT_DIFF_RAW=$(git diff HEAD 2>/dev/null || echo "")
+    if [ -z "$GIT_DIFF_RAW" ]; then
         # If no diff from HEAD, try staged changes
-        GIT_DIFF=$(git diff --cached 2>/dev/null || echo "No staged changes")
+        GIT_DIFF_RAW=$(git diff --cached 2>/dev/null || echo "")
+    fi
+    
+    # Limit git diff size to prevent prompt overflow
+    if [ -n "$GIT_DIFF_RAW" ]; then
+        if [ ${#GIT_DIFF_RAW} -gt $GIT_DIFF_MAX_SIZE ]; then
+            # Truncate and add notice
+            GIT_DIFF="${GIT_DIFF_RAW:0:$GIT_DIFF_MAX_SIZE}
+
+... (差分が大きすぎるため切り詰められました。完全な差分は 'git diff HEAD' で確認してください)"
+            debug_log "GIT" "Git diff truncated due to size (${#GIT_DIFF_RAW} > $GIT_DIFF_MAX_SIZE chars)"
+        else
+            GIT_DIFF="$GIT_DIFF_RAW"
+        fi
+    else
+        GIT_DIFF="変更なし"
     fi
 
     # Get recent commit log
@@ -364,21 +382,21 @@ fi
 REVIEW_PROMPT=$(
     cat <<EOF
 作業内容を厳正にレビューして、改善点を指摘してください。
-以下に Git の情報が提供されない場合は、自ら git diff やコミット確認を行なって把握してください。
+Git 情報や Claude の作業まとめが空の場合は、自ら git diff やコミット確認を行って実際の変更内容を把握してください。
 
 ## Git の現在の状態:
 
 ### Git Status:
-${GIT_STATUS}
+${GIT_STATUS:-変更なし}
 
 ### Git Diff (最近の変更):
-${GIT_DIFF}
+${GIT_DIFF:-変更なし}
 
 ### 最近のコミット履歴:
-${GIT_LOG}
+${GIT_LOG:-コミット履歴が取得できませんでした}
 
 ## Claude の最後の発言（作業まとめ）:
-${CLAUDE_SUMMARY}
+${CLAUDE_SUMMARY:-作業まとめが取得できませんでした}
 EOF
 )
 
