@@ -119,46 +119,20 @@ create_discord_payload() {
     local work_summary="$3"
     local task_title="$4"
 
-    # Escape JSON values properly
-    local branch_json=$(echo -n "$branch" | jq -R -s '.')
-    local repo_json=$(echo -n "$repo_name" | jq -R -s '.')
-    local summary_json=$(echo -n "$work_summary" | jq -R -s '.')
-    local title_json=$(echo -n "$task_title" | jq -R -s '.')
-    local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+    # Create plain text message with all information
+    local content_text="🎉 **${task_title}** 🎉
 
-    # Create properly escaped content field
-    local content_text="**$(echo -n "$task_title" | sed 's/"/\\"/g')**"
+Repository: ${repo_name}
+Branch: ${branch}
+
+${work_summary}"
+
+    # Use jq to properly escape the content for JSON
+    local content_json=$(echo -n "$content_text" | jq -R -s '.')
 
     cat <<EOF
 {
-  "content": $(echo -n "$content_text" | jq -R -s '.'),
-  "embeds": [
-    {
-      "title": "info",
-      "color": 5763719,
-      "fields": [
-        {
-          "name": "Repository",
-          "value": ${repo_json},
-          "inline": true
-        },
-        {
-          "name": "Branch",
-          "value": ${branch_json},
-          "inline": true
-        },
-        {
-          "name": "Summary",
-          "value": ${summary_json},
-          "inline": true
-        }
-      ],
-      "footer": {
-        "text": "Claude Code"
-      },
-      "timestamp": "${timestamp}"
-    }
-  ]
+  "content": ${content_json}
 }
 EOF
 }
