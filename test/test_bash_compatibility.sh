@@ -11,31 +11,31 @@ echo "Testing with current Bash: $BASH_VERSION"
 test_associative_arrays() {
     local bash_path="$1"
     local description="$2"
-    
+
     echo "Testing $description ($bash_path)..."
-    
+
     # Test associative array declaration
     result=$($bash_path -c 'declare -A test_array 2>/dev/null && echo "SUPPORTED" || echo "NOT_SUPPORTED"')
-    
+
     if [ "$result" = "SUPPORTED" ]; then
         echo "  ✓ Associative arrays: SUPPORTED"
     else
         echo "  ✗ Associative arrays: NOT_SUPPORTED"
     fi
-    
+
     # Test BASH_VERSINFO
     version_info=$($bash_path -c 'echo "${BASH_VERSINFO[0]:-0}.${BASH_VERSINFO[1]:-0}.${BASH_VERSINFO[2]:-0}"')
     major_version=$($bash_path -c 'echo "${BASH_VERSINFO[0]:-0}"')
-    
+
     echo "  Version info: $version_info"
     echo "  Major version: $major_version"
-    
+
     if [ "$major_version" -ge 4 ]; then
         echo "  ✓ Version check: Modern Bash (4.0+)"
     else
         echo "  ✗ Version check: Legacy Bash (<4.0)"
     fi
-    
+
     echo ""
 }
 

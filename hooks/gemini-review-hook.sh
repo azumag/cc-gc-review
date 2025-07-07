@@ -12,7 +12,7 @@ readonly GEMINI_TIMEOUT=300
 cleanup() {
     [ -n "${TEMP_STDOUT:-}" ] && rm -f "$TEMP_STDOUT"
     [ -n "${TEMP_STDERR:-}" ] && rm -f "$TEMP_STDERR"
-    
+
     # Clean up debug log files (only if debug mode was enabled)
     if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
         local log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
@@ -25,7 +25,7 @@ log_message() {
     local level="$1"
     local stage="$2"
     local message="$3"
-    
+
     # Only log if debug mode is enabled
     if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
         local log_file="${GEMINI_HOOK_LOG_DIR:-/tmp}/gemini-review-debug-$$.log"
@@ -105,20 +105,20 @@ GIT_LOG=""
 
 if git rev-parse --git-dir >/dev/null 2>&1; then
     debug_log "GIT" "Gathering git information for review context"
-    
+
     # Get git status
     GIT_STATUS=$(git status --porcelain 2>/dev/null || echo "Unable to get git status")
-    
+
     # Get recent changes (staged and unstaged)
     GIT_DIFF=$(git diff HEAD 2>/dev/null || echo "Unable to get git diff")
     if [ -z "$GIT_DIFF" ]; then
         # If no diff from HEAD, try staged changes
         GIT_DIFF=$(git diff --cached 2>/dev/null || echo "No staged changes")
     fi
-    
+
     # Get recent commit log
     GIT_LOG=$(git log --oneline -n 3 2>/dev/null || echo "Unable to get git log")
-    
+
     debug_log "GIT" "Git status length: ${#GIT_STATUS}, diff length: ${#GIT_DIFF}, log length: ${#GIT_LOG}"
 else
     debug_log "GIT" "Not in a git repository"

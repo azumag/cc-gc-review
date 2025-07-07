@@ -6,7 +6,7 @@ set -e
 echo "=== Core Notification System Test ==="
 
 # Get absolute path to hooks directory before changing directories
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then
     HOOKS_DIR="$GITHUB_WORKSPACE/hooks"
 else
     HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)/hooks"
@@ -21,7 +21,7 @@ cp "$HOOKS_DIR/shared-utils.sh" .
 cp "$HOOKS_DIR/notification.sh" .
 
 # Create test transcript
-cat > test_transcript.jsonl << 'EOF'
+cat >test_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Implement a REST API for user management with CRUD operations"}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've implemented a complete REST API for user management with full CRUD operations.\n\n**API Implementation:**\n\n1. **User Model & Database**\n   - Created User schema with Mongoose/MongoDB\n   - Implemented data validation and sanitization\n   - Added password hashing with bcrypt\n   - Created database indexes for performance\n\n2. **CRUD Endpoints**\n   - `POST /api/users` - Create new user\n   - `GET /api/users` - Get all users (with pagination)\n   - `GET /api/users/:id` - Get user by ID\n   - `PUT /api/users/:id` - Update user\n   - `DELETE /api/users/:id` - Delete user\n\n3. **Authentication & Security**\n   - JWT-based authentication middleware\n   - Role-based access control (Admin/User)\n   - Input validation with Joi\n   - Rate limiting and request sanitization\n\n4. **Error Handling**\n   - Centralized error handling middleware\n   - Proper HTTP status codes\n   - Detailed error messages for development\n   - Sanitized error responses for production\n\n**Files Created:**\n- `/routes/users.js` - User route definitions\n- `/controllers/UserController.js` - Business logic\n- `/models/User.js` - User data model\n- `/middleware/auth.js` - Authentication middleware\n- `/middleware/validation.js` - Input validation\n- `/middleware/errorHandler.js` - Error handling\n- `/tests/user.test.js` - Comprehensive test suite\n\n**Features Implemented:**\n- ✅ Full CRUD operations for users\n- ✅ Input validation and sanitization\n- ✅ Password hashing and authentication\n- ✅ Pagination and filtering\n- ✅ Role-based permissions\n- ✅ Comprehensive error handling\n- ✅ API documentation with Swagger\n- ✅ Unit and integration tests\n\n**Testing Results:**\n- ✅ 98% test coverage\n- ✅ All CRUD operations working\n- ✅ Authentication flow verified\n- ✅ Error handling tested\n- ✅ Performance benchmarks passed\n\nThe user management REST API is now fully implemented and ready for production use."}]}}
 EOF
@@ -39,36 +39,36 @@ source "./shared-utils.sh"
 # Copy specific functions from notification.sh
 extract_task_title() {
     local summary="$1"
-    
+
     if [ -z "$summary" ]; then
         echo "Task Completed"
         return
     fi
-    
+
     local title=$(echo "$summary" | grep -v "^$" | tail -n 1)
     title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
     title=$(echo "$title" | sed -e 's/^Work Summary:[[:space:]]*//' -e 's/^\*\*Work Summary\*\*:[[:space:]]*//')
     title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//')
-    
+
     if [ ${#title} -lt 5 ]; then
         title="Task Completed"
     fi
-    
+
     echo "$title"
 }
 
 get_work_summary() {
     local transcript_path="$1"
     local summary=""
-    
+
     if [ -f "$transcript_path" ]; then
         summary=$(extract_last_assistant_message "$transcript_path" 0 true)
-        
+
         if [ -z "$summary" ]; then
             summary="Work completed in project $(basename $(pwd))"
         fi
     fi
-    
+
     echo "$summary"
 }
 
@@ -77,13 +77,13 @@ create_discord_payload() {
     local repo_name="$2"
     local work_summary="$3"
     local task_title="$4"
-    
+
     local branch_json=$(echo -n "$branch" | jq -R -s '.')
     local repo_json=$(echo -n "$repo_name" | jq -R -s '.')
     local summary_json=$(echo -n "$work_summary" | jq -R -s '.')
     local title_json=$(echo -n "$task_title" | jq -R -s '.')
     local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-    
+
     cat <<EOF
 {
   "content": "🎉 **${task_title}** 🎉",

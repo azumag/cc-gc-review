@@ -86,7 +86,8 @@ jobs:
       run: |
         echo "Checking for potential security issues in shell scripts..."
         # Use find to properly exclude test helper directories
-        if find . -name "*.sh" -o -name "*.bash" | grep -v "test/test_helper" | xargs grep -l "eval\|rm -rf /\|chmod 777" 2>/dev/null; then
+        # Check for dangerous patterns: eval, rm -rf / (root deletion), chmod 777
+        if find . -name "*.sh" -o -name "*.bash" | grep -v "test/test_helper" | xargs grep -l "eval\|rm -rf /[^a-zA-Z0-9_/-]\|chmod 777" 2>/dev/null; then
           echo "WARNING: Potential security issues found!"
           echo "Please review the above matches carefully."
           exit 1

@@ -10,14 +10,14 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Create test transcript
-cat > test_transcript.jsonl << 'EOF'
+cat >test_transcript.jsonl <<'EOF'
 {"role": "user", "content": "Fix the authentication bug in the login form that's causing users to be unable to log in with valid credentials."}
 {"role": "assistant", "content": "I'll help you fix the authentication bug in the login form. Let me examine the codebase to understand the issue.\n\nAfter analyzing the code, I found the issue in the password validation logic. The problem is in the `validateCredentials` function where the password comparison is using strict equality (===) instead of a secure comparison method.\n\nHere's what I fixed:\n\n1. **Fixed password comparison**: Changed from `password === storedPassword` to using `bcrypt.compare()` for secure password verification\n2. **Added input sanitization**: Added proper input validation to prevent SQL injection\n3. **Improved error handling**: Enhanced error messages to be more informative while maintaining security\n4. **Added rate limiting**: Implemented login attempt rate limiting to prevent brute force attacks\n\nThe authentication system now properly validates user credentials and allows legitimate users to log in successfully while maintaining security best practices.\n\n## Files Modified\n- `/src/auth/validateCredentials.js` - Fixed password comparison logic\n- `/src/components/LoginForm.jsx` - Updated error handling\n- `/src/middleware/rateLimiter.js` - Added rate limiting middleware\n\n## Testing\nI tested the fix with various scenarios:\n- Valid credentials: ✅ Login successful\n- Invalid password: ✅ Proper error message\n- Invalid username: ✅ Proper error message\n- Rate limiting: ✅ Blocks excessive attempts\n\nThe authentication bug has been resolved and users can now log in with valid credentials."}
 EOF
 
 echo "1. Testing extract_last_assistant_message function..."
 # Source the shared-utils.sh from the hooks directory
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then
     source "$GITHUB_WORKSPACE/hooks/shared-utils.sh"
 else
     source ../hooks/shared-utils.sh
@@ -31,7 +31,7 @@ echo "${extracted_content:0:200}..."
 
 echo -e "\n2. Testing get_work_summary function..."
 # Source notification.sh which contains get_work_summary
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then
     source "$GITHUB_WORKSPACE/hooks/notification.sh"
 else
     source ../hooks/notification.sh
@@ -51,7 +51,7 @@ send_discord_notification() {
     local title="$1"
     local description="$2"
     local color="$3"
-    
+
     echo "=== DISCORD NOTIFICATION PAYLOAD ==="
     echo "Title: $title"
     echo "Color: $color"

@@ -12,14 +12,14 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy the hook
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then
     cp "$GITHUB_WORKSPACE/hooks/gemini-review-hook.sh" .
 else
     cp ../hooks/gemini-review-hook.sh .
 fi
 
 # Create a mock gemini command that simulates real behavior
-cat > gemini << 'EOF'
+cat >gemini <<'EOF'
 #!/bin/bash
 # Mock gemini command for testing
 
@@ -68,7 +68,7 @@ export PATH="$TEST_DIR:$PATH"
 echo "1. Testing basic functionality with database connection content..."
 
 # Create test transcript with database content
-cat > db_transcript.jsonl << 'EOF'
+cat >db_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Fix the database connection issues."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've fixed the database connection issues in the application.\n\n**Problem Analysis:**\nThe application was experiencing connection pool exhaustion and timeouts.\n\n**Solution:**\n1. **Connection Pool Configuration**\n   - Increased max connections to 50\n   - Set proper timeout values\n   - Added connection retry logic\n   - Implemented connection cleanup\n\n2. **Error Handling**\n   - Added database health checks\n   - Implemented graceful degradation\n   - Added comprehensive logging\n   - Created monitoring dashboard\n\n**Files Modified:**\n- /src/config/database.js - Pool configuration\n- /src/middleware/dbHealth.js - Health checks\n- /src/utils/dbConnection.js - Connection utilities\n- /tests/database/connection.test.js - Tests\n\n**Results:**\n- ✅ No more connection timeouts\n- ✅ 40% performance improvement\n- ✅ Robust error handling\n- ✅ Comprehensive monitoring\n\nDatabase connection issues are now resolved."}]}}
 EOF
@@ -89,7 +89,7 @@ fi
 
 echo -e "\n2. Testing with comprehensive logging content..."
 
-cat > logging_transcript.jsonl << 'EOF'
+cat >logging_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Add comprehensive logging."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've implemented comprehensive logging throughout the application.\n\n**Implementation:**\n1. **Winston Logger**\n   - Multiple log levels configured\n   - File rotation with daily rotation\n   - JSON structured logging\n   - Request correlation IDs\n\n2. **Integration**\n   - HTTP request logging middleware\n   - Database query logging\n   - Error logging with stack traces\n   - Performance logging\n\n**Files Created:**\n- /src/utils/logger.js - Winston configuration\n- /src/middleware/logging.js - Request logging\n- /src/config/logging.js - Configuration\n- /tests/utils/logger.test.js - Tests\n\n**Features:**\n- ✅ Structured JSON logging\n- ✅ Multiple log levels\n- ✅ File rotation\n- ✅ Request correlation\n- ✅ Error tracking\n\nComprehensive logging is now active."}]}}
 EOF
@@ -100,7 +100,7 @@ echo "✓ Contains expected structure: $(if [[ "$output2" == *'"decision"'* ]]; 
 
 echo -e "\n3. Testing with excellent caching implementation..."
 
-cat > caching_transcript.jsonl << 'EOF'
+cat >caching_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Implement caching layer."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've implemented a comprehensive caching layer for optimal performance.\n\n**Implementation:**\n1. **Redis Cluster**\n   - 3-node cluster with replication\n   - Connection pooling\n   - Automatic failover\n   - Health monitoring\n\n2. **Cache Strategies**\n   - Cache-aside pattern\n   - Write-through caching\n   - Intelligent invalidation\n   - Cache warming\n\n3. **Performance Results**\n   - 75% response time reduction\n   - 60% database load reduction\n   - 300% concurrent user increase\n   - 85% cache hit rate\n\n**Files Created:**\n- /src/services/CacheService.js - Core logic\n- /src/middleware/cacheMiddleware.js - Express middleware\n- /src/config/redis.js - Redis configuration\n- /tests/cache/cacheService.test.js - Tests\n\nCaching layer provides excellent performance improvements."}]}}
 EOF
@@ -110,13 +110,13 @@ echo "✓ Hook executed with caching content"
 
 echo -e "\n4. Testing with REVIEW_COMPLETED scenario..."
 
-cat > completed_transcript.jsonl << 'EOF'
+cat >completed_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Please review this."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED"}]}}
 EOF
 
 # This should exit early without calling gemini
-set +e  # Allow exit without error
+set +e # Allow exit without error
 echo '{"transcript_path": "completed_transcript.jsonl"}' | ./gemini-review-hook.sh >/dev/null 2>&1
 exit_code=$?
 set -e
@@ -133,10 +133,10 @@ echo -e "\n5. Testing content extraction integrity..."
 echo "Checking Claude content extraction..."
 
 # Simulate the extraction process
-source ./gemini-review-hook.sh >/dev/null 2>&1 || true  # Source functions only
+source ./gemini-review-hook.sh >/dev/null 2>&1 || true # Source functions only
 
 # Create test transcript for extraction
-cat > extract_test.jsonl << 'EOF'
+cat >extract_test.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Add authentication."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've implemented JWT authentication with comprehensive security features.\n\n**Security Implementation:**\n1. **JWT Tokens**\n   - Secure token generation\n   - Refresh token mechanism\n   - Token blacklist for logout\n   - Proper expiration handling\n\n2. **Password Security**\n   - bcrypt hashing\n   - Salt rounds: 12\n   - Password strength validation\n   - Account lockout protection\n\n3. **API Security**\n   - CSRF protection\n   - Rate limiting\n   - Input sanitization\n   - SQL injection prevention\n\n**Files Implemented:**\n- /src/middleware/auth.js - JWT middleware\n- /src/controllers/AuthController.js - Auth endpoints\n- /src/models/User.js - User model\n- /src/utils/jwt.js - JWT utilities\n- /tests/auth/authentication.test.js - Tests\n\n**Testing:**\n- ✅ All security tests passing\n- ✅ Penetration testing completed\n- ✅ Load testing successful\n- ✅ OWASP compliance verified\n\nAuthentication system is production-ready with enterprise-grade security."}]}}
 EOF

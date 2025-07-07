@@ -8,7 +8,7 @@ set -e
 echo "=== Gemini Content Extraction Test ==="
 
 # Get absolute path to hooks directory before changing directories
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then
     HOOKS_DIR="$GITHUB_WORKSPACE/hooks"
 else
     HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)/hooks"
@@ -49,7 +49,7 @@ extract_last_assistant_message() {
 echo "1. Testing realistic Claude Code work scenario..."
 
 # Create comprehensive test transcript
-cat > realistic_transcript.jsonl << 'EOF'
+cat >realistic_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Implement user registration with email verification"}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I'll implement a complete user registration system with email verification.\n\n**Implementation Overview:**\n\n1. **Registration Endpoint**\n   - Created POST /api/auth/register endpoint\n   - Implemented input validation with Joi schemas\n   - Added password strength requirements\n   - Included duplicate email checking\n\n2. **Email Verification System**\n   - Generated secure verification tokens\n   - Implemented email sending with Nodemailer\n   - Created verification endpoint\n   - Added token expiration (24 hours)\n\n3. **Database Schema**\n   - Added User model with Mongoose\n   - Included email verification fields\n   - Implemented proper indexing\n   - Added account status tracking\n\n4. **Security Features**\n   - Password hashing with bcrypt (12 rounds)\n   - Rate limiting for registration attempts\n   - Input sanitization and validation\n   - CSRF protection\n\n**Files Created:**\n- `/src/controllers/AuthController.js` - Registration logic\n- `/src/models/User.js` - User database model\n- `/src/middleware/validation.js` - Input validation\n- `/src/services/EmailService.js` - Email sending service\n- `/src/routes/auth.js` - Authentication routes\n- `/src/templates/verification-email.html` - Email template\n- `/tests/auth/registration.test.js` - Comprehensive test suite\n\n**API Endpoints:**\n- `POST /api/auth/register` - User registration\n- `GET /api/auth/verify/:token` - Email verification\n- `POST /api/auth/resend-verification` - Resend verification email\n\n**Validation Rules:**\n- Email: Valid format, unique in database\n- Password: Minimum 8 characters, mixed case, numbers, symbols\n- Username: 3-20 characters, alphanumeric only\n- All inputs sanitized against XSS and injection\n\n**Email Configuration:**\n- SMTP integration with configurable providers\n- HTML email templates with company branding\n- Fallback to text-only emails\n- Email delivery tracking and retry logic\n\n**Testing Results:**\n- ✅ Unit tests: 98% coverage\n- ✅ Integration tests: All scenarios covered\n- ✅ Security testing: Penetration tested\n- ✅ Load testing: 1000 concurrent registrations\n- ✅ Email delivery: 99.5% success rate\n\n**Error Handling:**\n- Graceful handling of duplicate registrations\n- Proper error messages without information disclosure\n- Email service failure fallbacks\n- Database connection error handling\n\nUser registration with email verification is now fully implemented and production-ready."}]}}
 EOF
@@ -79,7 +79,7 @@ echo "✓ Contains 'Nodemailer': $(if [[ "$extracted_content" == *"Nodemailer"* 
 echo -e "\n3. Testing with multiple assistant messages..."
 
 # Create transcript with multiple responses
-cat > multi_response_transcript.jsonl << 'EOF'
+cat >multi_response_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Add basic logging."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've added basic console logging to the application."}]}}
 {"type": "user", "uuid": "user-002", "message": {"content": [{"type": "text", "text": "Make it more comprehensive."}]}}
@@ -95,7 +95,7 @@ echo "✓ Contains Winston: $(if [[ "$last_assistant_content" == *"Winston"* ]];
 echo -e "\n4. Testing edge cases..."
 
 # Test with REVIEW_COMPLETED
-cat > review_complete.jsonl << 'EOF'
+cat >review_complete.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Any improvements needed?"}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED"}]}}
 EOF
@@ -104,7 +104,7 @@ completed_msg=$(extract_last_assistant_message "review_complete.jsonl")
 echo "✓ REVIEW_COMPLETED extracted: '$completed_msg'"
 
 # Test with REVIEW_RATE_LIMITED
-cat > rate_limited.jsonl << 'EOF'
+cat >rate_limited.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Please review."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_RATE_LIMITED"}]}}
 EOF

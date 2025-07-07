@@ -18,7 +18,7 @@ if ! command -v bats >/dev/null 2>&1; then
     echo "Installing bats-core..."
     git clone https://github.com/bats-core/bats-core.git /tmp/bats-core
     cd /tmp/bats-core
-    
+
     # Use modern Bash on macOS if available
     if [[ "$OSTYPE" == "darwin"* ]] && command -v brew >/dev/null 2>&1; then
         BASH_PATH=$(brew --prefix 2>/dev/null)/bin/bash
@@ -31,9 +31,12 @@ if ! command -v bats >/dev/null 2>&1; then
     else
         sudo ./install.sh /usr/local
     fi
-    
+
     cd -
-    rm -rf /tmp/bats-core
+    # Cleanup temporary directory safely
+    if [ -d "/tmp/bats-core" ]; then
+        rm -rf /tmp/bats-core
+    fi
 fi
 
 # Verify bats installation
@@ -86,6 +89,6 @@ echo "BATS_LIB_PATH=$BATS_LIB_PATH"
 
 # Write to GitHub environment if available
 if [ -n "${GITHUB_ENV:-}" ]; then
-    echo "BATS_LIB_PATH=$BATS_LIB_PATH" >> "$GITHUB_ENV"
+    echo "BATS_LIB_PATH=$BATS_LIB_PATH" >>"$GITHUB_ENV"
     echo "✓ BATS_LIB_PATH added to GitHub environment"
 fi

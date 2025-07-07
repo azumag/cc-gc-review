@@ -25,7 +25,7 @@ else
     echo "✅ Bash version: $BASH_VERSION (running under $(bash --version | head -1))"
 fi
 
-# Check jq version  
+# Check jq version
 JQ_VERSION=$(jq --version | sed 's/jq-//')
 echo "✅ jq version: $JQ_VERSION"
 

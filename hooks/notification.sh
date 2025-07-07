@@ -128,7 +128,7 @@ create_discord_payload() {
 
     # Create properly escaped content field
     local content_text="**$(echo -n "$task_title" | sed 's/"/\\"/g')**"
-    
+
     cat <<EOF
 {
   "content": $(echo -n "$content_text" | jq -R -s '.'),

@@ -51,16 +51,16 @@ echo
 get_work_summary() {
     local transcript_path="$1"
     local summary=""
-    
+
     if [ -f "$transcript_path" ]; then
         summary=$(extract_last_assistant_message "$transcript_path" 0 true 2>&1 || echo "")
-        
+
         # If still empty, provide a generic fallback
         if [ -z "$summary" ]; then
             summary="Work completed in project $(basename $(pwd))"
         fi
     fi
-    
+
     echo "$summary"
 }
 
@@ -114,7 +114,7 @@ echo
 
 extract_last_assistant_message_fixed() {
     local transcript_path="$1"
-    local line_limit="${2:-0}" # 0 means no limit
+    local line_limit="${2:-0}"       # 0 means no limit
     local full_content="${3:-false}" # true to get full content, false for last line only
 
     if [ ! -f "$transcript_path" ]; then
@@ -176,24 +176,27 @@ echo "=========================================="
 echo
 
 # Simulate what notification.sh does
-transcript_path=$(find_transcript_path() {
-    local current_dir=$(pwd)
-    local claude_projects_dir="$HOME/.claude/projects"
-    
-    if [ -d "$claude_projects_dir" ]; then
-        local escaped_path=$(echo "$current_dir" | sed 's/[^a-zA-Z0-9]/-/g')
-        local project_dir=$(find "$claude_projects_dir" -type d -name "*$escaped_path*" | head -1)
-        
-        if [ -n "$project_dir" ]; then
-            local transcript_file=$(ls -t "$project_dir"/*.jsonl 2>/dev/null | head -1)
-            if [ -f "$transcript_file" ]; then
-                echo "$transcript_file"
-                return 0
+transcript_path=$(
+    find_transcript_path() {
+        local current_dir=$(pwd)
+        local claude_projects_dir="$HOME/.claude/projects"
+
+        if [ -d "$claude_projects_dir" ]; then
+            local escaped_path=$(echo "$current_dir" | sed 's/[^a-zA-Z0-9]/-/g')
+            local project_dir=$(find "$claude_projects_dir" -type d -name "*$escaped_path*" | head -1)
+
+            if [ -n "$project_dir" ]; then
+                local transcript_file=$(ls -t "$project_dir"/*.jsonl 2>/dev/null | head -1)
+                if [ -f "$transcript_file" ]; then
+                    echo "$transcript_file"
+                    return 0
+                fi
             fi
         fi
-    fi
-    return 1
-}; find_transcript_path)
+        return 1
+    }
+    find_transcript_path
+)
 
 echo "Found transcript path: $transcript_path"
 echo "Path matches expected: $([ "$transcript_path" = "$TRANSCRIPT_PATH" ] && echo "YES" || echo "NO")"
@@ -207,16 +210,16 @@ echo "Is empty: $([ -z "$notification_work_summary" ] && echo "YES" || echo "NO"
 get_work_summary_fixed() {
     local transcript_path="$1"
     local summary=""
-    
+
     if [ -f "$transcript_path" ]; then
         summary=$(extract_last_assistant_message_fixed "$transcript_path" 0 true)
-        
+
         # If still empty, provide a generic fallback
         if [ -z "$summary" ]; then
             summary="Work completed in project $(basename $(pwd))"
         fi
     fi
-    
+
     echo "$summary"
 }
 
@@ -235,7 +238,7 @@ echo "but JSONL files contain individual JSON objects on separate lines."
 echo
 echo "CURRENT BEHAVIOR:"
 echo "- full_content=true: FAILS with jq parse error"
-echo "- full_content=false: FAILS with jq parse error"  
+echo "- full_content=false: FAILS with jq parse error"
 echo "- line_limit > 0: WORKS but only gets last line from recent messages"
 echo
 echo "WHAT notification.sh GETS:"

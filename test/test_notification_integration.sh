@@ -10,7 +10,7 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
 # Copy notification files and modify them to work in test environment
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then
     cp "$GITHUB_WORKSPACE/hooks/notification.sh" .
     cp "$GITHUB_WORKSPACE/hooks/shared-utils.sh" .
 else
@@ -26,7 +26,7 @@ else
 fi
 
 # Create test transcript
-cat > test_transcript.jsonl << 'EOF'
+cat >test_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Implement user authentication with JWT tokens"}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've implemented a complete JWT-based authentication system for your application.\n\n**Implementation Overview:**\n\n1. **JWT Token Management**\n   - Created secure token generation with proper expiration\n   - Implemented refresh token mechanism\n   - Added token blacklist for logout functionality\n\n2. **Authentication Middleware**\n   - Built Express middleware for token validation\n   - Added role-based access control (RBAC)\n   - Implemented rate limiting for login attempts\n\n3. **Security Features**\n   - Password hashing with bcrypt\n   - CSRF protection\n   - Secure HTTP-only cookies for token storage\n   - Input validation and sanitization\n\n**Files Created:**\n- `/src/middleware/auth.js` - JWT authentication middleware\n- `/src/controllers/AuthController.js` - Login/logout/refresh endpoints\n- `/src/models/User.js` - User model with password hashing\n- `/src/utils/jwt.js` - JWT utility functions\n- `/src/routes/auth.js` - Authentication routes\n\n**API Endpoints:**\n- `POST /api/auth/login` - User login\n- `POST /api/auth/logout` - User logout\n- `POST /api/auth/refresh` - Refresh access token\n- `GET /api/auth/me` - Get current user profile\n\n**Security Measures:**\n- Access tokens expire in 15 minutes\n- Refresh tokens expire in 7 days\n- Rate limiting: 5 login attempts per minute\n- Passwords require 8+ characters with mixed case\n\n**Testing:**\n- ✅ Unit tests for all authentication functions\n- ✅ Integration tests for API endpoints\n- ✅ Security testing with penetration tools\n- ✅ Load testing with 1000+ concurrent users\n\nJWT authentication system is now fully implemented and production-ready."}]}}
 EOF
@@ -38,14 +38,14 @@ git config user.email "test@example.com"
 git checkout -b feature/jwt-auth --quiet
 
 # Create .env file with test webhook (will be intercepted)
-cat > .env << 'EOF'
+cat >.env <<'EOF'
 DISCORD_CLAUDE_NOTIFICATION_WEBHOOK_URL=https://discord.com/api/webhooks/test/webhook
 EOF
 
 echo "1. Testing notification workflow with realistic scenario..."
 
 # Override the send_discord_notification function to capture and display the payload
-cat >> notification.sh << 'EOF'
+cat >>notification.sh <<'EOF'
 
 # Override send_discord_notification for testing
 send_discord_notification() {
@@ -70,7 +70,7 @@ CLAUDE_TRANSCRIPT_PATH="test_transcript.jsonl" ./notification.sh
 echo -e "\n2. Testing with send_completion_notification function..."
 
 # Test the send_completion_notification function specifically
-cat > test_completion.sh << 'EOF'
+cat >test_completion.sh <<'EOF'
 #!/bin/bash
 source "./shared-utils.sh"
 source "./notification.sh"

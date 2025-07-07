@@ -42,7 +42,7 @@ extract_last_assistant_message() {
 echo "1. Testing with realistic Claude Code transcript format..."
 
 # Create test transcript matching Claude Code format
-cat > test_transcript.jsonl << 'EOF'
+cat >test_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Fix the database connection issues in the application."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I'll help you fix the database connection issues in the application.\n\n**Issue Analysis:**\nThe application is experiencing database connection problems due to connection pool exhaustion and improper error handling.\n\n**Solution Implementation:**\n\n1. **Connection Pool Configuration**\n   - Increased max connections from 10 to 50\n   - Set connection timeout to 30 seconds\n   - Added connection retry logic with exponential backoff\n   - Implemented proper connection cleanup\n\n2. **Error Handling**\n   - Added database connection health checks\n   - Implemented graceful degradation for connection failures\n   - Added logging for connection events\n   - Created connection monitoring dashboard\n\n3. **Performance Optimizations**\n   - Implemented connection pooling with pg-pool\n   - Added query optimization for slow queries\n   - Implemented connection caching\n   - Added database query logging\n\n**Files Modified:**\n- /src/config/database.js - Connection pool configuration\n- /src/middleware/dbHealth.js - Health check middleware\n- /src/utils/dbConnection.js - Connection utilities\n- /tests/database/connection.test.js - Database tests\n\n**Testing Results:**\n- ✅ Connection pool properly configured\n- ✅ Error handling working correctly\n- ✅ Performance improved by 40%\n- ✅ No more connection timeout errors\n- ✅ Database health monitoring active\n\nThe database connection issues have been resolved and the application now has robust database connectivity."}]}}
 EOF
@@ -56,7 +56,7 @@ echo "${extracted_content:0:200}..."
 echo -e "\n2. Testing with multiple assistant messages..."
 
 # Create transcript with multiple assistant messages
-cat > multi_assistant_transcript.jsonl << 'EOF'
+cat >multi_assistant_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Add logging to the application."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I'll add basic logging to the application with console output."}]}}
 {"type": "user", "uuid": "user-002", "message": {"content": [{"type": "text", "text": "Can you make the logging more comprehensive?"}]}}
@@ -78,7 +78,7 @@ echo "✓ Recent content extracted: ${#recent_content} characters"
 echo -e "\n4. Testing with transcript containing REVIEW_COMPLETED..."
 
 # Create transcript with REVIEW_COMPLETED
-cat > review_completed_transcript.jsonl << 'EOF'
+cat >review_completed_transcript.jsonl <<'EOF'
 {"type": "user", "uuid": "user-001", "message": {"content": [{"type": "text", "text": "Please review the code."}]}}
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "I've reviewed the code and found it to be well-structured and follows best practices."}]}}
 {"type": "user", "uuid": "user-002", "message": {"content": [{"type": "text", "text": "Any final improvements needed?"}]}}
@@ -144,7 +144,7 @@ fi
 echo -e "\n8. Comparison with shared-utils.sh approach..."
 
 # Test if both approaches would extract the same content
-if [ -n "${GITHUB_WORKSPACE:-}" ]; then 
+if [ -n "${GITHUB_WORKSPACE:-}" ]; then
     source "$GITHUB_WORKSPACE/hooks/shared-utils.sh"
 else
     source ../hooks/shared-utils.sh

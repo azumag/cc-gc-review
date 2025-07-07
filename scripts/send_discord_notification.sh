@@ -35,13 +35,13 @@ collect_failed_jobs() {
     local -a job_results=("$@")
     local -a job_names=("Test Suite" "Linting" "Formatting" "Integration Tests" "Release Process")
     local -a failed_jobs_array=()
-    
+
     for i in "${!job_results[@]}"; do
         if [[ "${job_results[$i]}" == "failure" ]]; then
             failed_jobs_array+=("• ${job_names[$i]}")
         fi
     done
-    
+
     # Join array elements with newlines using IFS manipulation in a subshell
     local failed_jobs=""
     if [[ ${#failed_jobs_array[@]} -gt 0 ]]; then
@@ -51,7 +51,7 @@ collect_failed_jobs() {
             echo -n "${failed_jobs_array[*]}"
         )
     fi
-    
+
     echo -n "$failed_jobs"
 }
 
@@ -69,7 +69,7 @@ create_discord_payload() {
     local actor_json=$(echo -n "${ACTOR}" | jq -R -s '.')
     local message_json=$(echo -n "${COMMIT_MESSAGE}" | jq -R -s '.')
     local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-    
+
     cat <<EOF
 {
   "content": "🚨 **CI Build Failed** 🚨",
@@ -131,9 +131,9 @@ EOF
 send_notification() {
     local payload
     payload=$(create_discord_payload)
-    
+
     printf "Sending Discord notification...\n"
-    
+
     if curl -X POST \
         -H "Content-Type: application/json" \
         -d "$payload" \
@@ -161,7 +161,7 @@ main() {
     printf "Commit: %s\n" "${SHA:0:7}"
     printf "Author: %s\n" "$ACTOR"
     printf "==================================\n"
-    
+
     if send_notification; then
         printf "Notification process completed successfully\n"
         exit 0
