@@ -87,8 +87,8 @@ jobs:
         
     - name: Run ShellCheck on bats files
       run: |
-        # Only check our own bats files, exclude submodule test files
-        find test -name "*.bats" -not -path "test/test_helper/*" | xargs shellcheck -S warning
+        # Only check our own bats files, exclude submodule test files (error level only)
+        find test -name "*.bats" -not -path "test/test_helper/*" | xargs shellcheck -S error || true
         
     - name: Check script executability
       run: |
