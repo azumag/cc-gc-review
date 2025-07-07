@@ -300,6 +300,7 @@ PRINCIPLES=$(
 - 改善点を指摘された場合は、その改善点に従って修正せよ
 - 修正後は [REVIEW_COMPLETED] を表示せず、再度レビューを受けること
 - レビュー内容に問題がなく、改善点がすべてクリアになった場合のみ「REVIEW_COMPLETED」とだけ発言せよ
+- ただし、作業承認のためのレビューだった場合は、REVIEW_COMPLETED は表示せず、作業を開始すること
 - レビュー内容が空、もしくは「REVIEW_RATE_LIMITED」とだけ書かれていた場合は、「REVIEW_RATE_LIMITED」とだけ発言せよ
 EOF
 )
