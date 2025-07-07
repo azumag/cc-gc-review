@@ -92,23 +92,25 @@ run_gemini() {
     
     debug_log "$log_prefix" "Starting Gemini execution with model args: $model_args"
     debug_log "$log_prefix" "Prompt length: ${#prompt} characters"
-    debug_log "$log_prefix" "Prompt first 200 chars: ${prompt:0:200}"
     
     # Execute with timeout if available
     if command -v timeout >/dev/null 2>&1; then
-        timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$0" | gemini -s -y '"${model_args}" "$prompt" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
-        return $?
+        # Use a temporary file to safely pass the prompt with special characters
+        local temp_prompt=$(mktemp)
+        echo "$prompt" > "$temp_prompt"
+        timeout "${GEMINI_TIMEOUT}s" gemini -s -y $model_args < "$temp_prompt" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        local exit_code=$?
+        rm -f "$temp_prompt"
+        return $exit_code
     else
         debug_log "$log_prefix" "timeout command not available, using manual timeout handling"
         >&2 echo "[gemini-review-hook] Warning: timeout command not available for $log_prefix model, using manual timeout handling"
         
-        # Debug logging of prompt if enabled
-        if [ "$DEBUG_MODE" = "true" ]; then
-            echo "$prompt" >> "$LOG_FILE"
-        fi
-        
         # Manual timeout management
-        echo "$prompt" | gemini -s -y $model_args >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
+        local temp_prompt=$(mktemp)
+        echo "$prompt" > "$temp_prompt"
+        gemini -s -y $model_args < "$temp_prompt" >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
+        rm -f "$temp_prompt"
         local gemini_pid=$!
         
         local wait_count=0
@@ -341,7 +343,8 @@ GIT_DIFF=""
 GIT_LOG=""
 
 # Git diff size limit to prevent prompt overflow (characters)
-readonly GIT_DIFF_MAX_SIZE=3000
+# Can be overridden by GEMINI_DIFF_MAX_SIZE environment variable
+readonly GIT_DIFF_MAX_SIZE="${GEMINI_DIFF_MAX_SIZE:-3000}"
 
 if git rev-parse --git-dir >/dev/null 2>&1; then
     debug_log "GIT" "Gathering git information for review context"
@@ -349,24 +352,17 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     # Get git status
     GIT_STATUS=$(git status --porcelain 2>/dev/null || echo "Unable to get git status")
 
-    # Get recent changes (staged and unstaged) with size limit
-    GIT_DIFF_RAW=$(git diff HEAD 2>/dev/null || echo "")
-    if [ -z "$GIT_DIFF_RAW" ]; then
+    # Get file list of changes instead of full diff to avoid overwhelming the prompt
+    GIT_DIFF_FILES=$(git diff --name-status HEAD 2>/dev/null || echo "")
+    if [ -z "$GIT_DIFF_FILES" ]; then
         # If no diff from HEAD, try staged changes
-        GIT_DIFF_RAW=$(git diff --cached 2>/dev/null || echo "")
+        GIT_DIFF_FILES=$(git diff --name-status --cached 2>/dev/null || echo "")
     fi
     
-    # Limit git diff size to prevent prompt overflow
-    if [ -n "$GIT_DIFF_RAW" ]; then
-        if [ ${#GIT_DIFF_RAW} -gt $GIT_DIFF_MAX_SIZE ]; then
-            # Truncate and add notice
-            GIT_DIFF="${GIT_DIFF_RAW:0:$GIT_DIFF_MAX_SIZE}
-
-... (差分が大きすぎるため切り詰められました。完全な差分は 'git diff HEAD' で確認してください)"
-            debug_log "GIT" "Git diff truncated due to size (${#GIT_DIFF_RAW} > $GIT_DIFF_MAX_SIZE chars)"
-        else
-            GIT_DIFF="$GIT_DIFF_RAW"
-        fi
+    if [ -n "$GIT_DIFF_FILES" ]; then
+        # Show file list with change type (A=Added, M=Modified, D=Deleted)
+        GIT_DIFF="変更されたファイル一覧:\n$GIT_DIFF_FILES\n\n詳細な差分は 'git diff HEAD' で確認してください"
+        debug_log "GIT" "Git diff files: $(echo "$GIT_DIFF_FILES" | wc -l) files changed"
     else
         GIT_DIFF="変更なし"
     fi
@@ -407,7 +403,7 @@ debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_S
 
 # Run Gemini Pro model
 debug_log "GEMINI" "Prompt length: ${#REVIEW_PROMPT} characters"
-debug_log "GEMINI" "Prompt preview (first 200 chars): ${REVIEW_PROMPT:0:200}"
+debug_log "GEMINI" "Prompt preview ${REVIEW_PROMPT}"
 GEMINI_EXIT_CODE=0
 run_gemini "" "GEMINI" "$REVIEW_PROMPT" || GEMINI_EXIT_CODE=$?
 
@@ -461,6 +457,8 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
     run_gemini "--model=gemini-2.5-flash" "FLASH" "$REVIEW_PROMPT" || GEMINI_EXIT_CODE=$?
 
     GEMINI_REVIEW=$(cat "$TEMP_STDOUT" 2>/dev/null)
+    debug_log "FLASH" "Flash model output captured, length: ${#GEMINI_REVIEW} characters"
+    debug_log "FLASH" "Gemini's review: $GEMINI_REVIEW"
     debug_log "FLASH" "Flash model execution completed with exit code: $GEMINI_EXIT_CODE"
     if [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z $GEMINI_REVIEW ]]; then
         debug_log "FLASH" "Flash model also failed, setting $RATE_LIMITED_RESPONSE"
