@@ -86,7 +86,12 @@ safe_exit() {
   "reason": $escaped_reason
 }
 EOF
-    exit 0
+    # Return appropriate exit code based on decision
+    if [ "$decision" = "block" ]; then
+        exit 1
+    else
+        exit 0
+    fi
 }
 
 # Read input
@@ -309,7 +314,7 @@ monitor_ci() {
         if [ $elapsed -ge $MAX_WAIT_TIME ]; then
             echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" >&2
             echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" >"$log_dir/ci_monitor.log"
-            safe_exit "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" "allow"
+            safe_exit "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" "block"
         fi
 
         # Get workflow runs

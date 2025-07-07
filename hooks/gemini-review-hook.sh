@@ -170,7 +170,12 @@ safe_exit() {
   "reason": $escaped_reason
 }
 EOF
-    exit 0
+    # Return appropriate exit code based on decision
+    if [ "$decision" = "block" ]; then
+        exit 1
+    else
+        exit 0
+    fi
 }
 
 # Set trap for cleanup on script exit
