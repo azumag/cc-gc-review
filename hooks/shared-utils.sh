@@ -94,38 +94,41 @@ find_latest_transcript_in_dir() {
     fi
     
     local latest_file
-    local temp_file
-    temp_file=$(mktemp)
     
-    # Use compatible stat command for both macOS and Linux
+    # Use compatible stat command for both macOS and Linux with simplified error handling
     if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
-        # macOS/BSD stat
-        if find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>"$temp_file" | sort -rn | head -1 | cut -d' ' -f2- >"${temp_file}.result"; then
-            latest_file=$(cat "${temp_file}.result")
-        else
-            if [ "$debug_mode" = "true" ] && [ -s "$temp_file" ]; then
-                echo "DEBUG: stat command errors:" >&2
-                cat "$temp_file" >&2
-            fi
-            rm -f "$temp_file" "${temp_file}.result"
+        # macOS/BSD stat - use while-read for simple in-memory processing
+        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>&1 | 
+            while IFS= read -r line; do
+                if echo "$line" | grep -q "^stat:"; then
+                    [ "$debug_mode" = "true" ] && echo "DEBUG: $line" >&2
+                    exit 3  # Signal stat error to parent shell
+                else
+                    echo "$line"
+                fi
+            done | sort -rn | head -1 | cut -d' ' -f2-
+        )
+        # Check if while-read signaled an error via exit code
+        if [ $? -eq 3 ]; then
             return 3
         fi
     else
-        # GNU stat (Linux)
-        if find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>"$temp_file" | sort -rn | head -1 | cut -d' ' -f2- >"${temp_file}.result"; then
-            latest_file=$(cat "${temp_file}.result")
-        else
-            if [ "$debug_mode" = "true" ] && [ -s "$temp_file" ]; then
-                echo "DEBUG: stat command errors:" >&2
-                cat "$temp_file" >&2
-            fi
-            rm -f "$temp_file" "${temp_file}.result"
+        # GNU stat (Linux) - use while-read for simple in-memory processing  
+        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>&1 | 
+            while IFS= read -r line; do
+                if echo "$line" | grep -q "^stat:"; then
+                    [ "$debug_mode" = "true" ] && echo "DEBUG: $line" >&2
+                    exit 3  # Signal stat error to parent shell
+                else
+                    echo "$line"
+                fi
+            done | sort -rn | head -1 | cut -d' ' -f2-
+        )
+        # Check if while-read signaled an error via exit code
+        if [ $? -eq 3 ]; then
             return 3
         fi
     fi
-    
-    # Clean up temporary files
-    rm -f "$temp_file" "${temp_file}.result"
     
     if [ -n "$latest_file" ] && [ -f "$latest_file" ]; then
         echo "$latest_file"
