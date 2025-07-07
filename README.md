@@ -11,44 +11,31 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 
 ## 🚀 クイックスタート
 
-既にこのプロジェクトを使用している場合、以下の手順でスクリプトの新しい構造に移行してください：
+新規ユーザー向けの導入手順です。
 
-1. **リポジトリの更新**
-   ```bash
-   git pull origin main
-   git rm gemini-review-hook.sh notification.sh push-review-complete.sh shared-utils.sh
-   git add hooks/
-   git commit -m "migrate: Move scripts to hooks directory and update documentation"
-   ```
+### 1. 前提条件の確認
 
-2. **Claude Code設定の更新**
-   `~/.claude/settings.json` のパスを更新：
-   ```json
-   {
-     "hooks": {
-       "Stop": [
-         {
-           "command": "/絶対パス/to/cc-gc-review/hooks/gemini-review-hook.sh"
-         }
-       ]
-     }
-   }
-   ```
+以下のツールがインストールされていることを確認してください：
 
-3. **Discord通知設定の更新**（使用している場合）
-   ```json
-   {
-     "hooks": {
-       "Stop": [
-         {
-           "command": "/絶対パス/to/cc-gc-review/hooks/notification.sh"
-         }
-       ]
-     }
-   }
-   ```
+- **Bash**: 4.0以降
+- **jq**: JSONパーサー
+- **Node.js**: gemini-cliのインストールに必要
+- **gemini-cli**: Gemini AIとの連携用
 
-### 1. 設定
+### 2. 必要なツールのインストール
+
+```bash
+# jq (JSONパーサー)
+# macOSの場合
+brew install jq
+# Ubuntuの場合
+sudo apt-get install jq
+
+# gemini-cli (Gemini AI CLI)
+npm install -g gemini-cli
+```
+
+### 3. 設定
 
 `~/.claude/settings.json` に以下を追加する：
 (既存設定がある場合は /hooks を使った方が無難)
@@ -74,29 +61,9 @@ Claude Code での作業完了時に自動的に Gemini がレビューを実行
 
 **注意**: `/path/to/cc-gc-review/hooks/gemini-review-hook.sh` の部分は、`cc-gc-review` リポジトリのルートディレクトリへの絶対パスに `hooks/gemini-review-hook.sh` を追加したパスに置き換えてください。例：`/Users/username/cc-gc-review/hooks/gemini-review-hook.sh`
 
-### 2. 必要な環境
+### 4. 動作確認
 
-- Bash
-- jq
-- Node.js (gemini-cli のインストールに必要)
-- gemini-cli
-
-#### インストール方法
-
-**jq (JSONパーサー)**
-```bash
-# macOSの場合
-brew install jq
-# Ubuntuの場合
-sudo apt-get install jq
-```
-
-**gemini-cli (Gemini AI CLI)**
-```bash
-# 事前にNode.jsがインストールされている必要があります
-# Node.jsのインストール方法については、公式ドキュメント（https://nodejs.org/）を参照してください
-npm install -g gemini-cli
-```
+設定が完了したら、Claude Codeで作業を行い、stop hookが正常に動作することを確認してください。レビュー結果がClaude Codeに直接表示されます。
 
 ## 機能
 
@@ -349,25 +316,23 @@ Would you like me to help analyze and fix the CI failures?
 - `timeout`は各hookごとに設定可能です（デフォルト60秒）
 - いずれかのhookがタイムアウトした場合、実行中の全てのhookがキャンセルされます
 
-### self-review.sh - SubAgentによる厳格レビューフック
+### self-review.sh - レート制限時の代替レビューフック
 
-SubAgentにTaskとして作業内容の厳正なレビューを実行させ、必要に応じて修正を行うスクリプトです。
+`gemini-review-hook.sh`でレート制限が発生した場合に、Claude Codeに代替レビュー原則を提示するスクリプトです。
 
 #### 機能
 
-- **厳格なレビュー**: SubAgentによる詳細なコードレビューを実行
-- **自動修正**: レビュー結果に基づいて必要な修正を自動実行
-- **git diff確認**: 変更内容をgit diffで確認してからレビュー実行
-- **条件付き実行**: 前回のレビューが`REVIEW_RATE_LIMITED`の場合のみ実行される
-- **完了確認**: 問題がない場合は`REVIEW_COMPLETED`を出力
+- **条件付き実行**: 前回のレビューが`REVIEW_RATE_LIMITED`の場合のみ実行
+- **原則提示**: SubAgentによる厳正なレビュー実行の原則をClaude Codeに提示
+- **決定ブロック**: レビュー原則を含む`decision: block`応答を返す
+- **フォールバック機能**: Geminiレビューが利用できない場合の代替手段
 
 #### 動作の仕組み
 
 1. トランスクリプトから最後のアシスタントメッセージを抽出
 2. `REVIEW_RATE_LIMITED`が含まれている場合のみ実行
-3. SubAgentにレビュータスクを委任
-4. レビュー結果に基づいて必要な修正を実行
-5. 問題がない場合は`REVIEW_COMPLETED`を出力
+3. 厳格なレビュー原則をClaude Codeに提示
+4. `decision: block`と原則を含むJSON応答を返す
 
 #### 設定方法
 
@@ -390,7 +355,7 @@ SubAgentにTaskとして作業内容の厳正なレビューを実行させ、�
 }
 ```
 
-**注意**: このスクリプトは他のレビューフックと併用する場合、実行順序に注意が必要です。`gemini-review-hook.sh`でレート制限が発生した場合の代替手段として機能します。
+**注意**: このスクリプトは`gemini-review-hook.sh`の補助的な役割を果たし、レート制限が発生した場合のフォールバック機能として動作します。実際のコード修正は行わず、レビュー原則の提示のみを行います。
 
 ### 詳細ログの有効化
 
