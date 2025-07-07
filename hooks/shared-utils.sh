@@ -3,6 +3,19 @@
 
 set -euo pipefail
 
+# Logging functions for basic output
+log_info() {
+    echo "INFO: $*"
+}
+
+log_warning() {
+    echo "WARNING: $*" >&2
+}
+
+log_error() {
+    echo "ERROR: $*" >&2
+}
+
 # Function to extract last assistant message from JSONL transcript
 extract_last_assistant_message() {
     local transcript_path="$1"
