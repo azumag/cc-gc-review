@@ -1,4 +1,4 @@
-#\!/bin/bash
+#!/bin/bash
 echo 'Starting test hook...'
 GEMINI_EXIT_CODE=0
 echo 'GEMINI_EXIT_CODE set to: '$GEMINI_EXIT_CODE
