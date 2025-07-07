@@ -42,8 +42,8 @@ get_active_workflow_runs() {
     current_sha=$(git rev-parse HEAD)
 
     # Get all workflow runs for the current branch and filter by current commit
-    if ! gh run list --branch "$branch" --limit 20 --json status,conclusion,databaseId,name,headSha,url 2>/dev/null | \
-         jq --arg sha "$current_sha" '[.[] | select(.headSha == $sha)]'; then
+    if ! gh run list --branch "$branch" --limit 20 --json status,conclusion,databaseId,name,headSha,url 2>/dev/null |
+        jq --arg sha "$current_sha" '[.[] | select(.headSha == $sha)]'; then
         return 1
     fi
 }
@@ -97,7 +97,7 @@ monitor_ci() {
     echo "Monitoring CI status for branch: $branch" >&2
     local log_dir
     log_dir=$(mktemp -d)
-    echo "Monitoring CI status for branch: $branch" > "$log_dir/ci_monitor.log"
+    echo "Monitoring CI status for branch: $branch" >"$log_dir/ci_monitor.log"
 
     while true; do
         local current_time
@@ -107,7 +107,7 @@ monitor_ci() {
         # Check if we've exceeded max wait time
         if [ $elapsed -ge $MAX_WAIT_TIME ]; then
             echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" >&2
-            echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" > "$log_dir/ci_monitor.log"
+            echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" >"$log_dir/ci_monitor.log"
             exit 0
         fi
 
@@ -115,7 +115,7 @@ monitor_ci() {
         local run_data
         if ! run_data=$(get_active_workflow_runs "$branch"); then
             echo "Warning: Failed to fetch workflow runs (network error)" >&2
-            echo "Warning: Failed to fetch workflow runs (network error)" > "$log_dir/ci_monitor.log"
+            echo "Warning: Failed to fetch workflow runs (network error)" >"$log_dir/ci_monitor.log"
             sleep $delay
             # Increase delay with exponential backoff
             delay=$((delay * 2))
@@ -126,7 +126,7 @@ monitor_ci() {
         # Check if there are any runs
         if [ "$(echo "$run_data" | jq '. | length')" -eq 0 ]; then
             echo "No workflow runs found for branch $branch" >&2
-            echo "No workflow runs found for branch $branch" > "$log_dir/ci_monitor.log"
+            echo "No workflow runs found for branch $branch" >"$log_dir/ci_monitor.log"
             sleep $delay
             continue
         fi
@@ -135,7 +135,7 @@ monitor_ci() {
         local all_completed=true
         local any_failed=false
         local failed_runs=()
-        
+
         while IFS= read -r run; do
             local run_id
             run_id=$(echo "$run" | jq -r '.databaseId')
@@ -143,7 +143,7 @@ monitor_ci() {
             status=$(echo "$run" | jq -r '.status')
             local conclusion
             conclusion=$(echo "$run" | jq -r '.conclusion // "null"')
-            
+
             case "$status" in
             "completed")
                 case "$conclusion" in
@@ -165,7 +165,7 @@ monitor_ci() {
                 ;;
             *)
                 echo "Unknown workflow status: $status for run $run_id" >&2
-                echo "Unknown workflow status: $status for run $run_id" > "$log_dir/ci_monitor.log"
+                echo "Unknown workflow status: $status for run $run_id" >"$log_dir/ci_monitor.log"
                 all_completed=false
                 ;;
             esac
@@ -191,13 +191,13 @@ EOF
         # If all runs are completed and none failed, success
         if [ "$all_completed" = true ]; then
             echo "All CI workflows passed successfully!" >&2
-            echo "All CI workflows passed successfully!" > "$log_dir/ci_monitor.log"
+            echo "All CI workflows passed successfully!" >"$log_dir/ci_monitor.log"
             exit 0
         fi
 
         # Some runs are still in progress, continue monitoring
         echo "Some workflows still in progress, continuing to monitor..." >&2
-        echo "Some workflows still in progress, continuing to monitor..." > "$log_dir/ci_monitor.log"
+        echo "Some workflows still in progress, continuing to monitor..." >"$log_dir/ci_monitor.log"
 
         # Wait before next check
         sleep $delay

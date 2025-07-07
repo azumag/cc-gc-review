@@ -6,14 +6,14 @@ set -euo pipefail
 DEBUG_MODE=false
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --debug)
-            DEBUG_MODE=true
-            shift
-            ;;
-        *)
-            # Unknown option, ignore and pass through
-            shift
-            ;;
+    --debug)
+        DEBUG_MODE=true
+        shift
+        ;;
+    *)
+        # Unknown option, ignore and pass through
+        shift
+        ;;
     esac
 done
 
@@ -52,21 +52,21 @@ log_message() {
     local level="$1"
     local stage="$2"
     local message="$3"
-    
+
     # Only log when debug mode is enabled
     if [ "$DEBUG_MODE" = "true" ]; then
         local timestamp
         timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
         local log_entry="$timestamp [$level] [$stage] $message"
-        
+
         # Log to main log file
-        echo "$log_entry" >> "$LOG_FILE"
-        
+        echo "$log_entry" >>"$LOG_FILE"
+
         # Log errors to separate error log
         if [ "$level" = "ERROR" ]; then
-            echo "$log_entry" >> "$ERROR_LOG_FILE"
+            echo "$log_entry" >>"$ERROR_LOG_FILE"
         fi
-        
+
         # Also output to stderr for immediate visibility in debug mode
         echo "$log_entry" >&2
     fi
@@ -192,7 +192,7 @@ TEMP_STDERR=$(mktemp)
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
 if command -v timeout >/dev/null 2>&1; then
-    timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+    timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
     GEMINI_EXIT_CODE=$?
 else
     debug_log "GEMINI" "timeout command not available, using manual timeout handling"
@@ -269,7 +269,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 
     # Use shorter timeout for Flash model (it should be faster)
     if command -v timeout >/dev/null 2>&1; then
-        timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"
