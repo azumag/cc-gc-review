@@ -279,9 +279,18 @@ export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_
 
 # 必要なツールの確認
 if ! command -v bats >/dev/null 2>&1; then
-    log_error "bats is not installed"
-    echo "Please run: ./setup_test.sh"
-    exit 1
+    log_warning "bats is not installed"
+    
+    # If running with specific test pattern (like for testing dependency handling),
+    # don't exit - just skip BATS tests and run shell script tests only
+    if [ -n "$TEST_PATTERN" ]; then
+        log_warning "BATS not available but test pattern specified - will skip BATS tests and run shell script tests only"
+        SKIP_BATS_TESTS=true
+    else
+        log_error "BATS required for full test suite"
+        echo "Please run: ./setup_test.sh"
+        exit 1
+    fi
 fi
 
 # テスト実行
@@ -312,30 +321,37 @@ run_tests() {
         log_info "Current directory before bats: $(pwd)"
         log_info "Files in current directory: $(ls -l)"
 
-        # Run BATS tests and capture output
-        local bats_output
-        if [ -n "$TEST_PATTERN" ]; then
-            bats_output=$(bats "$bats_options" --filter "$TEST_PATTERN" test_*.bats 2>&1)
-        else
-            bats_output=$(bats "$bats_options" test_*.bats 2>&1)
-        fi
-
-        local bats_exit_code=$?
+        # Run BATS tests and capture output (if BATS is available)
+        local bats_exit_code=0
         local shell_tests_exit_code=0
         
-        # Display BATS output
-        echo "$bats_output"
-        
-        # Check if the only issue is test count mismatch warning (not actual test failures)
-        if [ "$bats_exit_code" -ne 0 ]; then
-            # Check if output contains actual test failures (lines starting with "not ok")
-            if echo "$bats_output" | grep -q "^not ok"; then
-                log_error "BATS tests have actual failures"
-            elif echo "$bats_output" | grep -q "bats warning.*Executed.*instead.*expected.*tests"; then
-                log_warning "BATS test count mismatch detected - treating as non-fatal (likely due to skipped tests)"
-                bats_exit_code=0  # Convert warning to success
+        if [ "${SKIP_BATS_TESTS:-false}" = "true" ]; then
+            log_warning "Skipping BATS tests (BATS not available)"
+            bats_exit_code=0
+        else
+            local bats_output
+            if [ -n "$TEST_PATTERN" ]; then
+                bats_output=$(bats "$bats_options" --filter "$TEST_PATTERN" test_*.bats 2>&1)
             else
-                log_error "BATS encountered unexpected error (exit code $bats_exit_code)"
+                bats_output=$(bats "$bats_options" test_*.bats 2>&1)
+            fi
+
+            bats_exit_code=$?
+            
+            # Display BATS output
+            echo "$bats_output"
+            
+            # Check if the only issue is test count mismatch warning (not actual test failures)
+            if [ "$bats_exit_code" -ne 0 ]; then
+                # Check if output contains actual test failures (lines starting with "not ok")
+                if echo "$bats_output" | grep -q "^not ok"; then
+                    log_error "BATS tests have actual failures"
+                elif echo "$bats_output" | grep -q "bats warning.*Executed.*instead.*expected.*tests"; then
+                    log_warning "BATS test count mismatch detected - treating as non-fatal (likely due to skipped tests)"
+                    bats_exit_code=0  # Convert warning to success
+                else
+                    log_error "BATS encountered unexpected error (exit code $bats_exit_code)"
+                fi
             fi
         fi
 
@@ -736,7 +752,9 @@ run_tests() {
 
         # Report overall test results summary
         log_header "\nTest Execution Summary"
-        if [ "$bats_exit_code" -eq 0 ]; then
+        if [ "${SKIP_BATS_TESTS:-false}" = "true" ]; then
+            log_warning "⚠ BATS tests: SKIPPED (BATS not available)"
+        elif [ "$bats_exit_code" -eq 0 ]; then
             log_success "✓ BATS tests: PASSED"
         else
             log_error "✗ BATS tests: FAILED"
@@ -750,7 +768,13 @@ run_tests() {
         fi
 
         # Return failure if either BATS tests or shell script tests failed
-        if [ "$bats_exit_code" -ne 0 ] || [ "$shell_tests_exit_code" -ne 0 ]; then
+        # (but don't treat skipped BATS tests as failure)
+        local bats_failed=false
+        if [ "${SKIP_BATS_TESTS:-false}" != "true" ] && [ "$bats_exit_code" -ne 0 ]; then
+            bats_failed=true
+        fi
+        
+        if [ "$bats_failed" = "true" ] || [ "$shell_tests_exit_code" -ne 0 ]; then
             return 1
         fi
 
