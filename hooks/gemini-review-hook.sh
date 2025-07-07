@@ -1,5 +1,20 @@
 #!/bin/bash
 
+# Parse command line arguments
+DEBUG_MODE=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --debug)
+            DEBUG_MODE=true
+            shift
+            ;;
+        *)
+            # Unknown option, ignore and pass through
+            shift
+            ;;
+    esac
+done
+
 # Source shared utilities
 source "$(dirname "$0")/shared-utils.sh"
 
@@ -7,6 +22,13 @@ source "$(dirname "$0")/shared-utils.sh"
 readonly CLAUDE_SUMMARY_MAX_LENGTH=1000
 readonly CLAUDE_SUMMARY_PRESERVE_LENGTH=400
 readonly GEMINI_TIMEOUT=300
+
+# Debug log configuration (only when debug mode is enabled)
+if [ "$DEBUG_MODE" = "true" ]; then
+    readonly LOG_DIR="/tmp"
+    readonly LOG_FILE="${LOG_DIR}/gemini-review-hook.log"
+    readonly ERROR_LOG_FILE="${LOG_DIR}/gemini-review-error.log"
+fi
 
 # Cleanup function for temporary files
 cleanup() {
@@ -25,11 +47,22 @@ log_message() {
     local level="$1"
     local stage="$2"
     local message="$3"
-
-    # Only log if debug mode is enabled
-    if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
-        local log_file="${GEMINI_HOOK_LOG_DIR:-/tmp}/gemini-review-debug-$$.log"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] [$stage] $message" >>"$log_file"
+    
+    # Only log when debug mode is enabled
+    if [ "$DEBUG_MODE" = "true" ]; then
+        local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
+        local log_entry="$timestamp [$level] [$stage] $message"
+        
+        # Log to main log file
+        echo "$log_entry" >> "$LOG_FILE"
+        
+        # Log errors to separate error log
+        if [ "$level" = "ERROR" ]; then
+            echo "$log_entry" >> "$ERROR_LOG_FILE"
+        fi
+        
+        # Also output to stderr for immediate visibility in debug mode
+        echo "$log_entry" >&2
     fi
 }
 
@@ -44,6 +77,7 @@ trap cleanup EXIT
 
 INPUT=$(cat)
 info_log "START" "Script started, input received"
+info_log "INPUT" "Received input: $INPUT"
 
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path')
 debug_log "TRANSCRIPT" "Processing transcript path: $TRANSCRIPT_PATH"
@@ -269,6 +303,8 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
     # Other error - provide error details to user
     error_log "ERROR" "Non-rate-limit error occurred: exit code $GEMINI_EXIT_CODE"
+    error_log "ERROR" "Error output: $ERROR_OUTPUT"
+    error_log "ERROR" "Review prompt was: $REVIEW_PROMPT"
     ERROR_REASON="Gemini execution failed with exit code $GEMINI_EXIT_CODE"
     if [ -n "$ERROR_OUTPUT" ]; then
         ERROR_REASON="$ERROR_REASON. Error: $ERROR_OUTPUT"
@@ -282,6 +318,9 @@ DECISION="block"
 # Safely combine review and principles, handling potential JSON content in GEMINI_REVIEW
 COMBINED_CONTENT=$(printf "%s\n\n%s" "レビュー内容：$GEMINI_REVIEW" "$PRINCIPLES")
 COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
+
+info_log "OUTPUT" "Returning decision: $DECISION"
+info_log "OUTPUT" "Review content length: ${#GEMINI_REVIEW} characters"
 
 cat <<EOF
 {
