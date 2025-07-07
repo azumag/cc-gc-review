@@ -63,7 +63,7 @@ setup_test_environment() {
 # Common cleanup function
 cleanup_test_env() {
     # Clean up test tmux sessions if TEST_SESSION is defined
-    if [[ -n "$TEST_SESSION" ]]; then
+    if [[ -n "${TEST_SESSION:-}" ]]; then
         # Clean up tmux session with retry
         local retry_count=0
         while [ $retry_count -lt 3 ] && tmux has-session -t "$TEST_SESSION" 2>/dev/null; do

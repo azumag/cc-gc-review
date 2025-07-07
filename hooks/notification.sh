@@ -4,7 +4,14 @@
 set -euo pipefail
 
 # Source shared utilities
-source "$(dirname "$0")/shared-utils.sh"
+# Handle both direct execution and sourcing
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # Script is being executed directly
+    source "$(dirname "$0")/shared-utils.sh"
+else
+    # Script is being sourced - use BASH_SOURCE[0] to get the script's actual location
+    source "$(dirname "${BASH_SOURCE[0]}")/shared-utils.sh"
+fi
 
 # Load environment variables from .env file
 load_env() {
@@ -282,5 +289,7 @@ main() {
     exit 0
 }
 
-# Execute main function
-main "$@"
+# Execute main function only when script is run directly (not sourced)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
