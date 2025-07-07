@@ -95,39 +95,30 @@ find_latest_transcript_in_dir() {
     
     local latest_file
     
-    # Use compatible stat command for both macOS and Linux with simplified error handling
+    # Use compatible stat command for both macOS and Linux with robust error handling
+    local stat_output
+    local stat_errors
+    
     if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
-        # macOS/BSD stat - use while-read for simple in-memory processing
-        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>&1 | 
-            while IFS= read -r line; do
-                if echo "$line" | grep -q "^stat:"; then
-                    [ "$debug_mode" = "true" ] && echo "DEBUG: $line" >&2
-                    exit 3  # Signal stat error to parent shell
-                else
-                    echo "$line"
-                fi
-            done | sort -rn | head -1 | cut -d' ' -f2-
-        )
-        # Check if while-read signaled an error via exit code
-        if [ $? -eq 3 ]; then
+        # macOS/BSD stat
+        if ! stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null); then
+            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on macOS" >&2
             return 3
         fi
     else
-        # GNU stat (Linux) - use while-read for simple in-memory processing  
-        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>&1 | 
-            while IFS= read -r line; do
-                if echo "$line" | grep -q "^stat:"; then
-                    [ "$debug_mode" = "true" ] && echo "DEBUG: $line" >&2
-                    exit 3  # Signal stat error to parent shell
-                else
-                    echo "$line"
-                fi
-            done | sort -rn | head -1 | cut -d' ' -f2-
-        )
-        # Check if while-read signaled an error via exit code
-        if [ $? -eq 3 ]; then
+        # GNU stat (Linux)
+        if ! stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>/dev/null); then
+            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on Linux" >&2
             return 3
         fi
+    fi
+    
+    # Process the stat output to find the latest file
+    if [ -n "$stat_output" ]; then
+        latest_file=$(echo "$stat_output" | sort -rn | head -1 | cut -d' ' -f2-)
+    else
+        [ "$debug_mode" = "true" ] && echo "DEBUG: No stat output received" >&2
+        return 3
     fi
     
     if [ -n "$latest_file" ] && [ -f "$latest_file" ]; then
