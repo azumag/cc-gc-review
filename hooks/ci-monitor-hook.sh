@@ -114,14 +114,14 @@ if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "null" ]; then
     else
         warn_log "SESSION" "No session ID or transcript path provided, skipping monitoring"
         echo "[ci-monitor-hook] Warning: No session ID or transcript path provided, skipping monitoring" >&2
-        safe_exit "No session ID or transcript path provided, monitoring skipped" "allow"
+        safe_exit "No session ID or transcript path provided, monitoring skipped" "approve"
     fi
 fi
 
 if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
     warn_log "TRANSCRIPT" "Transcript path is null or empty, skipping monitoring"
     echo "[ci-monitor-hook] Warning: No transcript path provided, skipping monitoring" >&2
-    safe_exit "No transcript path provided, monitoring skipped" "allow"
+    safe_exit "No transcript path provided, monitoring skipped" "approve"
 fi
 
 # Only validate session ID consistency if we have both session_id and transcript_path from input
@@ -171,12 +171,12 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
         else
             warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
             echo "[ci-monitor-hook] Warning: No transcript files found, skipping monitoring" >&2
-            safe_exit "No transcript files found, monitoring skipped" "allow"
+            safe_exit "No transcript files found, monitoring skipped" "approve"
         fi
     else
         warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
         echo "[ci-monitor-hook] Warning: Transcript directory not found, skipping monitoring" >&2
-        safe_exit "Transcript directory not found, monitoring skipped" "allow"
+        safe_exit "Transcript directory not found, monitoring skipped" "approve"
     fi
 fi
 
@@ -205,13 +205,13 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     
     if ! echo "$LAST_MESSAGE" | grep -q "REVIEW_COMPLETED && PUSH_COMPLETED"; then
         debug_log "TRANSCRIPT" "REVIEW_COMPLETED && PUSH_COMPLETED marker not found, exiting"
-        safe_exit "REVIEW_COMPLETED && PUSH_COMPLETED marker not found" "allow"
+        safe_exit "REVIEW_COMPLETED && PUSH_COMPLETED marker not found" "approve"
     fi
     
     debug_log "TRANSCRIPT" "Found REVIEW_COMPLETED && PUSH_COMPLETED marker, continuing"
 else
     debug_log "TRANSCRIPT" "Transcript file not found or not accessible"
-    safe_exit "Transcript file not found or not accessible" "allow"
+    safe_exit "Transcript file not found or not accessible" "approve"
 fi
 
 # Function to get current branch
@@ -376,7 +376,7 @@ EOF
         if [ "$all_completed" = true ]; then
             echo "All CI workflows passed successfully!" >&2
             echo "All CI workflows passed successfully!" >"$log_dir/ci_monitor.log"
-            safe_exit "All CI workflows passed successfully!" "allow"
+            safe_exit "All CI workflows passed successfully!" "approve"
         fi
 
         # Some runs are still in progress, continue monitoring
@@ -395,21 +395,21 @@ EOF
 if ! command -v gh &>/dev/null; then
     echo "Warning: GitHub CLI (gh) not found. CI monitoring disabled." >&2
     log_warning "GitHub CLI (gh) not found. CI monitoring disabled."
-    safe_exit "GitHub CLI (gh) not found. CI monitoring disabled." "allow"
+    safe_exit "GitHub CLI (gh) not found. CI monitoring disabled." "approve"
 fi
 
 # Check if we're authenticated with gh
 if ! gh auth status &>/dev/null; then
     echo "Warning: Not authenticated with GitHub CLI. CI monitoring disabled." >&2
     log_warning "Not authenticated with GitHub CLI. CI monitoring disabled."
-    safe_exit "Not authenticated with GitHub CLI. CI monitoring disabled." "allow"
+    safe_exit "Not authenticated with GitHub CLI. CI monitoring disabled." "approve"
 fi
 
 # Check if we're in a git repository
 if ! git rev-parse --git-dir &>/dev/null; then
     echo "Warning: Not in a git repository. CI monitoring disabled." >&2
     log_warning "Not in a git repository. CI monitoring disabled."
-    safe_exit "Not in a git repository. CI monitoring disabled." "allow"
+    safe_exit "Not in a git repository. CI monitoring disabled." "approve"
 fi
 
 # Start monitoring

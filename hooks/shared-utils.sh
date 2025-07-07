@@ -32,6 +32,15 @@ safe_exit() {
   "reason": $escaped_reason
 }
 EOF
+
+    # Expected schema:
+    # {
+    #   "continue": "boolean (optional)",
+    #   "suppressOutput": "boolean (optional)",
+    #   "stopReason": "string (optional)",
+    #   "decision": "\"approve\" | \"block\" (optional)",
+    #   "reason": "string (optional)"
+    # }
     
     # Return appropriate exit code based on decision
     # - "block" decisions return exit 1 (failure) to signal CI systems

@@ -199,14 +199,14 @@ if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "null" ]; then
     else
         warn_log "SESSION" "No session ID or transcript path provided, skipping review"
         echo "[gemini-review-hook] Warning: No session ID or transcript path provided, skipping review" >&2
-        safe_exit "No session ID or transcript path provided, review skipped" "allow"
+        safe_exit "No session ID or transcript path provided, review skipped" "approve"
     fi
 fi
 
 if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
     warn_log "TRANSCRIPT" "Transcript path is null or empty, skipping review"
     echo "[gemini-review-hook] Warning: No transcript path provided, skipping review" >&2
-    safe_exit "No transcript path provided, review skipped" "allow"
+    safe_exit "No transcript path provided, review skipped" "approve"
 fi
 
 # Only validate session ID consistency if we have both session_id and transcript_path from input
@@ -257,12 +257,12 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
         else
             warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
             echo "[gemini-review-hook] Warning: No transcript files found, skipping review" >&2
-            safe_exit "No transcript files found, review skipped" "allow"
+            safe_exit "No transcript files found, review skipped" "approve"
         fi
     else
         warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
         echo "[gemini-review-hook] Warning: Transcript directory not found, skipping review" >&2
-        safe_exit "Transcript directory not found, review skipped" "allow"
+        safe_exit "Transcript directory not found, review skipped" "approve"
     fi
 fi
 
@@ -289,11 +289,11 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$REVIEW_COMPLETED_MARKER"; then
         debug_log "TRANSCRIPT" "Found REVIEW_COMPLETED marker, exiting"
-        safe_exit "Review already completed" "allow"
+        safe_exit "Review already completed" "approve"
     fi
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$RATE_LIMITED_RESPONSE"; then
         debug_log "TRANSCRIPT" "Found RATE_LIMITED marker, exiting"
-        safe_exit "Review rate limited" "allow"
+        safe_exit "Review rate limited" "approve"
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
 else
