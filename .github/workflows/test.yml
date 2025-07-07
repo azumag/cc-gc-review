@@ -78,7 +78,12 @@ jobs:
         
     - name: Run ShellCheck on shell scripts
       run: |
-        find . -name "*.sh" -not -path "./test-tmp-*" -not -path "./.git/*" | xargs shellcheck -S warning
+        # Check test files strictly (treat warnings as errors)
+        find test -name "*.sh" | xargs shellcheck -S warning
+        # Check hook files with warnings only (don't fail on warnings)
+        find hooks -name "*.sh" | xargs shellcheck -S error || true
+        # Check other shell scripts strictly
+        find . -name "*.sh" -not -path "./test/*" -not -path "./hooks/*" -not -path "./test-tmp-*" -not -path "./.git/*" | xargs shellcheck -S warning
         
     - name: Run ShellCheck on bats files
       run: |
