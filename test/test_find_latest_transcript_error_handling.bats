@@ -131,3 +131,28 @@ EOF
     assert_output --partial "DEBUG: stat command succeeded but produced no output despite files existing in:"
     assert_output --partial "empty_stat_dir"
 }
+
+@test "find_latest_transcript_in_dir handles mktemp failure gracefully" {
+    mkdir mktemp_fail_dir
+    touch mktemp_fail_dir/test.jsonl
+    
+    # Create a mock mktemp command that always fails
+    export PATH="$TEST_DIR:$PATH"
+    cat > mktemp << 'EOF'
+#!/bin/bash
+# Mock mktemp that always fails
+echo "mktemp: cannot create temp file" >&2
+exit 1
+EOF
+    chmod +x mktemp
+    
+    # Test with debug mode - should use fallback error handling
+    HOOK_DEBUG=true run find_latest_transcript_in_dir "mktemp_fail_dir"
+    assert_equal "$status" 0
+    
+    # Should contain the fallback message about not being able to create temp file
+    assert_output --partial "DEBUG: Cannot create temp file for detailed error capture, using basic error handling"
+    
+    # Should still find the file successfully despite mktemp failure
+    assert_output --partial "test.jsonl"
+}

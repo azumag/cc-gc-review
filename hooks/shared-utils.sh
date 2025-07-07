@@ -95,59 +95,55 @@ find_latest_transcript_in_dir() {
     
     local latest_file
     
-    # Use compatible stat command for both macOS and Linux with robust error reporting
+    # Use compatible stat command for both macOS and Linux with error reporting
     local stat_output
-    local stat_errors
+    local stat_exit_code
+    local error_msg=""
     local temp_stderr
+    local use_temp_file=false
     
-    # Create temporary file with error handling
-    if ! temp_stderr=$(mktemp 2>/dev/null); then
-        [ "$debug_mode" = "true" ] && echo "DEBUG: Failed to create temporary file for error capture" >&2
-        # Fallback to simpler error handling without temp file
-        if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
-            # macOS/BSD stat - simplified fallback
-            if ! stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null); then
-                [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on macOS" >&2
-                return 3
-            fi
+    # Try to create temporary file for detailed error capture
+    if temp_stderr=$(mktemp 2>/dev/null); then
+        use_temp_file=true
+    else
+        [ "$debug_mode" = "true" ] && echo "DEBUG: Cannot create temp file for detailed error capture, using basic error handling" >&2
+    fi
+    
+    # Execute stat command with platform detection
+    if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
+        # macOS/BSD stat
+        local platform="macOS"
+        if [ "$use_temp_file" = "true" ]; then
+            stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>"$temp_stderr")
         else
-            # GNU stat (Linux) - simplified fallback
-            if ! stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>/dev/null); then
-                [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on Linux" >&2
-                return 3
-            fi
+            stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null)
         fi
     else
-        # Use temporary file for detailed error capture
-        if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
-            # macOS/BSD stat
-            stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>"$temp_stderr")
-            local stat_exit_code=$?
-            
-            if [ $stat_exit_code -ne 0 ]; then
-                local error_msg
-                error_msg=$(cat "$temp_stderr" 2>/dev/null || echo "unknown error")
-                [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on macOS (exit code: $stat_exit_code): $error_msg" >&2
-                rm -f "$temp_stderr" 2>/dev/null || true
-                return 3
-            fi
-        else
-            # GNU stat (Linux)
+        # GNU stat (Linux)
+        local platform="Linux"
+        if [ "$use_temp_file" = "true" ]; then
             stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>"$temp_stderr")
-            local stat_exit_code=$?
-            
-            if [ $stat_exit_code -ne 0 ]; then
-                local error_msg
-                error_msg=$(cat "$temp_stderr" 2>/dev/null || echo "unknown error")
-                [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on Linux (exit code: $stat_exit_code): $error_msg" >&2
-                rm -f "$temp_stderr" 2>/dev/null || true
-                return 3
-            fi
+        else
+            stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>/dev/null)
         fi
-        
-        # Clean up temp file
-        rm -f "$temp_stderr" 2>/dev/null || true
     fi
+    
+    stat_exit_code=$?
+    
+    # Handle stat command failure
+    if [ $stat_exit_code -ne 0 ]; then
+        if [ "$use_temp_file" = "true" ]; then
+            error_msg=$(cat "$temp_stderr" 2>/dev/null || echo "error details unavailable")
+            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on $platform (exit code: $stat_exit_code): $error_msg" >&2
+        else
+            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on $platform (exit code: $stat_exit_code)" >&2
+        fi
+        [ "$use_temp_file" = "true" ] && rm -f "$temp_stderr" 2>/dev/null
+        return 3
+    fi
+    
+    # Clean up temp file if used
+    [ "$use_temp_file" = "true" ] && rm -f "$temp_stderr" 2>/dev/null
     
     # Process the stat output to find the latest file
     # Note: stat_output should not be empty here since we already verified files exist
