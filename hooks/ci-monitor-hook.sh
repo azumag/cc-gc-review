@@ -71,28 +71,6 @@ info_log() { log_message "INFO" "$1" "$2"; }
 warn_log() { log_message "WARN" "$1" "$2"; }
 error_log() { log_message "ERROR" "$1" "$2"; }
 
-# Function to output safe JSON and exit
-safe_exit() {
-    local reason="${1:-Script terminated safely}"
-    local decision="${2:-allow}"
-    
-    # Safely escape the reason for JSON
-    local escaped_reason
-    escaped_reason=$(echo "$reason" | jq -Rs .)
-    
-    cat <<EOF
-{
-  "decision": "$decision",
-  "reason": $escaped_reason
-}
-EOF
-    # Return appropriate exit code based on decision
-    if [ "$decision" = "block" ]; then
-        exit 1
-    else
-        exit 0
-    fi
-}
 
 # Read input
 INPUT=$(cat)

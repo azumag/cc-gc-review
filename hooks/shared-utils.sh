@@ -16,6 +16,34 @@ log_error() {
     echo "ERROR: $*" >&2
 }
 
+# Function to output safe JSON and exit with appropriate exit code
+# This ensures consistent JSON output and proper shell exit codes for CI systems
+safe_exit() {
+    local reason="${1:-Script terminated safely}"
+    local decision="${2:-allow}"
+    
+    # Safely escape the reason for JSON
+    local escaped_reason
+    escaped_reason=$(echo "$reason" | jq -Rs .)
+    
+    cat <<EOF
+{
+  "decision": "$decision",
+  "reason": $escaped_reason
+}
+EOF
+    
+    # Return appropriate exit code based on decision
+    # - "block" decisions return exit 1 (failure) to signal CI systems
+    # - "allow" decisions return exit 0 (success) to let CI continue
+    # This dual approach ensures compatibility with both JSON-aware and exit-code-only CI systems
+    if [ "$decision" = "block" ]; then
+        exit 1
+    else
+        exit 0
+    fi
+}
+
 # Function to extract last assistant message from JSONL transcript
 extract_last_assistant_message() {
     local transcript_path="$1"
