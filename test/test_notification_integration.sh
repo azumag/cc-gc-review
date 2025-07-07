@@ -18,8 +18,12 @@ else
     cp ../hooks/shared-utils.sh .
 fi
 
-# Modify notification.sh to source shared-utils.sh from current directory
-sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh
+# Modify notification.sh to source shared-utils.sh from current directory (compatible with both macOS and Linux)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh
+else
+    sed -i 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh
+fi
 
 # Create test transcript
 cat > test_transcript.jsonl << 'EOF'

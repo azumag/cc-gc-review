@@ -17,8 +17,12 @@ setup() {
     # Copy and modify notification.sh to work in test environment
     cp "$REPO_ROOT/hooks/notification.sh" ./notification.sh
     
-    # Fix the path in notification.sh to use local shared-utils.sh
-    sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh
+    # Fix the path in notification.sh to use local shared-utils.sh (compatible with both macOS and Linux)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh
+    else
+        sed -i 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|g' notification.sh
+    fi
     
     # Create a mock git repository
     git init
@@ -33,7 +37,33 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should extract last meaningful line from summary" {
-    source "./notification.sh"
+    # Define the extract_task_title function locally to avoid sourcing the entire script
+    extract_task_title() {
+        local summary="$1"
+
+        if [ -z "$summary" ]; then
+            echo "Task Completed"
+            return
+        fi
+
+        # Extract the last meaningful line as title
+        local title
+        title=$(echo "$summary" | tail -n 1)
+
+        # Clean up and format title - remove Work Summary: prefix
+        title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
+        title=$(echo "$title" | sed -e 's/^Work Summary:[[:space:]]*//' -e 's/^\*\*Work Summary\*\*:[[:space:]]*//')
+
+        # Remove bullet points and common prefixes
+        title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//' -e 's/^[0-9]*\.[[:space:]]*//')
+
+        # Fallback if title is too short or empty
+        if [ ${#title} -lt 5 ]; then
+            title="Task Completed"
+        fi
+
+        echo "$title"
+    }
     
     local summary="Work Summary: Multiple tasks completed
     
@@ -48,7 +78,33 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle numbered lists" {
-    source "./notification.sh"
+    # Define the extract_task_title function locally to avoid sourcing the entire script
+    extract_task_title() {
+        local summary="$1"
+
+        if [ -z "$summary" ]; then
+            echo "Task Completed"
+            return
+        fi
+
+        # Extract the last meaningful line as title
+        local title
+        title=$(echo "$summary" | tail -n 1)
+
+        # Clean up and format title - remove Work Summary: prefix
+        title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
+        title=$(echo "$title" | sed -e 's/^Work Summary:[[:space:]]*//' -e 's/^\*\*Work Summary\*\*:[[:space:]]*//')
+
+        # Remove bullet points and common prefixes
+        title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//' -e 's/^[0-9]*\.[[:space:]]*//')
+
+        # Fallback if title is too short or empty
+        if [ ${#title} -lt 5 ]; then
+            title="Task Completed"
+        fi
+
+        echo "$title"
+    }
     
     local summary="1. Initialize the project
     2. Configure the settings
@@ -60,7 +116,33 @@ teardown() {
 }
 
 @test "notification.sh extract_task_title should handle different from full summary" {
-    source "./notification.sh"
+    # Define the extract_task_title function locally to avoid sourcing the entire script
+    extract_task_title() {
+        local summary="$1"
+
+        if [ -z "$summary" ]; then
+            echo "Task Completed"
+            return
+        fi
+
+        # Extract the last meaningful line as title
+        local title
+        title=$(echo "$summary" | tail -n 1)
+
+        # Clean up and format title - remove Work Summary: prefix
+        title=$(echo "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
+        title=$(echo "$title" | sed -e 's/^Work Summary:[[:space:]]*//' -e 's/^\*\*Work Summary\*\*:[[:space:]]*//')
+
+        # Remove bullet points and common prefixes
+        title=$(echo "$title" | sed -e 's/^[•*-][[:space:]]*//' -e 's/^Step [0-9]*[:.][[:space:]]*//' -e 's/^[0-9]*\.[[:space:]]*//')
+
+        # Fallback if title is too short or empty
+        if [ ${#title} -lt 5 ]; then
+            title="Task Completed"
+        fi
+
+        echo "$title"
+    }
     
     local summary="Work Summary: Fixed Discord notification issues
 

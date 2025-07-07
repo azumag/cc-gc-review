@@ -18,8 +18,12 @@ else
     cp ../hooks/notification.sh .
 fi
 
-# Fix the source path in notification.sh
-sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|' notification.sh
+# Fix the source path in notification.sh (compatible with both macOS and Linux)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|' notification.sh
+else
+    sed -i 's|source "$(dirname "$0")/shared-utils.sh"|source "./shared-utils.sh"|' notification.sh
+fi
 
 # Create test transcript
 cat > test_transcript.jsonl << 'EOF'
