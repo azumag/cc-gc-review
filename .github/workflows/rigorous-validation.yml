@@ -79,21 +79,29 @@ jobs:
         # Create test transcript for benchmarking
         echo '{"type": "assistant", "uuid": "test", "message": {"content": [{"type": "text", "text": "Test performance message"}]}}' > /tmp/perf_transcript.jsonl
         
-        # Mock gemini for performance testing
-        sudo tee /usr/local/bin/gemini > /dev/null << 'EOF'
+        # Create temporary directory for mock gemini command
+        MOCK_BIN_DIR=$(mktemp -d)
+        export PATH="${MOCK_BIN_DIR}:${PATH}"
+        
+        # Create mock gemini script in temporary directory
+        cat << 'EOF' > "${MOCK_BIN_DIR}/gemini"
         #!/bin/bash
         echo "Performance test: code review completed with standard analysis"
         EOF
-        sudo chmod +x /usr/local/bin/gemini
+        chmod +x "${MOCK_BIN_DIR}/gemini"
         
         # Measure baseline performance
         time echo '{"transcript_path": "/tmp/perf_transcript.jsonl"}' | ./hooks/gemini-review-hook.sh > /tmp/perf_result.json
         
-        # Validate performance requirements
-        if [ $(cat /tmp/perf_result.json | jq -r '.reason | length') -lt 50 ]; then
-          echo "❌ Performance regression: insufficient review depth"
+        # Validate performance requirements (minimum 50 characters for meaningful review output)
+        REASON_LENGTH=$(cat /tmp/perf_result.json | jq -r '.reason | length')
+        if [ "$REASON_LENGTH" -lt 50 ]; then
+          echo "❌ Performance regression: insufficient review depth (${REASON_LENGTH} chars < 50)"
           exit 1
         fi
+        
+        # Cleanup temporary mock directory
+        rm -rf "${MOCK_BIN_DIR}"
         
     - name: Security validation
       run: |
