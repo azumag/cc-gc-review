@@ -64,22 +64,80 @@ EOF
 }
 
 # Function to find latest transcript file using cross-platform stat command
+# 
+# ROBUST ERROR HANDLING:
+# This function provides comprehensive error detection and reporting for all failure modes.
+# Callers MUST check exit codes to handle errors appropriately.
+#
 # Usage: find_latest_transcript_in_dir "directory_path"
-# Returns: path to the latest .jsonl file or empty string if none found
+# Returns: path to the latest .jsonl file (on success only)
+# Exit codes: 
+#   0 = success (latest file path written to stdout)
+#   1 = directory not found or not accessible
+#   2 = no .jsonl files found in directory  
+#   3 = stat command error (file system or permission issues)
+# 
+# Debug mode: Set HOOK_DEBUG=true to enable detailed error logging to stderr
 find_latest_transcript_in_dir() {
     local transcript_dir="$1"
+    local debug_mode="${HOOK_DEBUG:-false}"
     
     if [ ! -d "$transcript_dir" ]; then
+        [ "$debug_mode" = "true" ] && echo "DEBUG: Directory not found: $transcript_dir" >&2
         return 1
     fi
     
+    # Check if any .jsonl files exist
+    if ! find "$transcript_dir" -name "*.jsonl" -type f -print -quit | grep -q .; then
+        [ "$debug_mode" = "true" ] && echo "DEBUG: No .jsonl files found in: $transcript_dir" >&2
+        return 2
+    fi
+    
+    local latest_file
     # Use compatible stat command for both macOS and Linux
     if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
         # macOS/BSD stat
-        find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-
+        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>&1 | {
+            local stat_error=0
+            while read -r line; do
+                if echo "$line" | grep -q "stat:"; then
+                    [ "$debug_mode" = "true" ] && echo "DEBUG: stat error: $line" >&2
+                    stat_error=1
+                else
+                    echo "$line"
+                fi
+            done
+            return $stat_error
+        } | sort -rn | head -1 | cut -d' ' -f2-)
+        local stat_exit=$?
     else
         # GNU stat (Linux)
-        find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-
+        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>&1 | {
+            local stat_error=0
+            while read -r line; do
+                if echo "$line" | grep -q "stat:"; then
+                    [ "$debug_mode" = "true" ] && echo "DEBUG: stat error: $line" >&2
+                    stat_error=1
+                else
+                    echo "$line"
+                fi
+            done
+            return $stat_error
+        } | sort -rn | head -1 | cut -d' ' -f2-)
+        local stat_exit=$?
+    fi
+    
+    if [ $stat_exit -ne 0 ]; then
+        [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed for files in: $transcript_dir" >&2
+        return 3
+    fi
+    
+    if [ -n "$latest_file" ] && [ -f "$latest_file" ]; then
+        echo "$latest_file"
+        return 0
+    else
+        [ "$debug_mode" = "true" ] && echo "DEBUG: No valid latest file found in: $transcript_dir" >&2
+        return 2
     fi
 }
 

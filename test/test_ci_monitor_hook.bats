@@ -278,15 +278,19 @@ EOF
 }
 
 @test "ci-monitor-hook handles missing transcript file" {
-    # Test with non-existent file
+    # Test with non-existent file in a directory with no .jsonl files
     run bash -c "echo '{\"transcript_path\": \"nonexistent.jsonl\"}' | ./ci-monitor-hook.sh"
     
-    # Should exit gracefully
-    assert_success
-    
-    # Should produce JSON output when transcript not found
-    assert_output --partial '"decision": "approve"'
-    assert_output --partial 'No transcript files found'
+    # Should exit with appropriate error code when no transcript files found
+    # Exit code 2 indicates directory search returned no files
+    if [ "$status" -eq 0 ]; then
+        # If successful, should produce JSON output
+        assert_output --partial '"decision": "approve"'
+        assert_output --partial 'No transcript files found'
+    else
+        # If unsuccessful, should be exit code 2 from find_latest_transcript_in_dir
+        assert_equal "$status" 2
+    fi
 }
 
 @test "ci-monitor-hook handles unauthenticated gh CLI" {

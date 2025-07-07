@@ -250,15 +250,35 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
     TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
     if [ -d "$TRANSCRIPT_DIR" ]; then
         LATEST_TRANSCRIPT=$(find_latest_transcript_in_dir "$TRANSCRIPT_DIR")
-        if [ -n "$LATEST_TRANSCRIPT" ] && [ -f "$LATEST_TRANSCRIPT" ]; then
-            warn_log "TRANSCRIPT" "Using latest transcript file instead: '$LATEST_TRANSCRIPT'"
-            echo "[gemini-review-hook] Warning: Using latest transcript file: '$LATEST_TRANSCRIPT'" >&2
-            TRANSCRIPT_PATH="$LATEST_TRANSCRIPT"
-        else
-            warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
-            echo "[gemini-review-hook] Warning: No transcript files found, skipping review" >&2
-            safe_exit "No transcript files found, review skipped" "approve"
-        fi
+        find_exit=$?
+        
+        case $find_exit in
+            0)
+                warn_log "TRANSCRIPT" "Using latest transcript file instead: '$LATEST_TRANSCRIPT'"
+                echo "[gemini-review-hook] Warning: Using latest transcript file: '$LATEST_TRANSCRIPT'" >&2
+                TRANSCRIPT_PATH="$LATEST_TRANSCRIPT"
+                ;;
+            1)
+                warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
+                echo "[gemini-review-hook] Warning: Transcript directory not found, skipping review" >&2
+                safe_exit "Transcript directory not found, review skipped" "approve"
+                ;;
+            2)
+                warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
+                echo "[gemini-review-hook] Warning: No transcript files found, skipping review" >&2
+                safe_exit "No transcript files found, review skipped" "approve"
+                ;;
+            3)
+                warn_log "TRANSCRIPT" "Error accessing transcript files in directory: '$TRANSCRIPT_DIR'"
+                echo "[gemini-review-hook] Warning: Error accessing transcript files, skipping review" >&2
+                safe_exit "Error accessing transcript files, review skipped" "approve"
+                ;;
+            *)
+                warn_log "TRANSCRIPT" "Unexpected error finding transcript files in directory: '$TRANSCRIPT_DIR'"
+                echo "[gemini-review-hook] Warning: Unexpected error finding transcript files, skipping review" >&2
+                safe_exit "Unexpected error finding transcript files, review skipped" "approve"
+                ;;
+        esac
     else
         warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
         echo "[gemini-review-hook] Warning: Transcript directory not found, skipping review" >&2
@@ -381,6 +401,12 @@ REVIEW_PROMPT=$(
     cat <<EOF
 作業内容を厳正にレビューして、改善点を指摘してください。
 Git 情報や Claude の作業まとめが空の場合は、自ら git diff やコミット確認を行って実際の変更内容を把握してください。
+
+## レビュー観点:
+- YAGNI：今必要じゃない機能は作らない
+- DRY：同じコードを繰り返さない
+- KISS：シンプルに保つ
+- t-wada TDD：テスト駆動開発
 
 ## Git の現在の状態:
 

@@ -164,15 +164,35 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
     TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
     if [ -d "$TRANSCRIPT_DIR" ]; then
         LATEST_TRANSCRIPT=$(find_latest_transcript_in_dir "$TRANSCRIPT_DIR")
-        if [ -n "$LATEST_TRANSCRIPT" ] && [ -f "$LATEST_TRANSCRIPT" ]; then
-            warn_log "TRANSCRIPT" "Using latest transcript file instead: '$LATEST_TRANSCRIPT'"
-            echo "[ci-monitor-hook] Warning: Using latest transcript file: '$LATEST_TRANSCRIPT'" >&2
-            TRANSCRIPT_PATH="$LATEST_TRANSCRIPT"
-        else
-            warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
-            echo "[ci-monitor-hook] Warning: No transcript files found, skipping monitoring" >&2
-            safe_exit "No transcript files found, monitoring skipped" "approve"
-        fi
+        find_exit=$?
+        
+        case $find_exit in
+            0)
+                warn_log "TRANSCRIPT" "Using latest transcript file instead: '$LATEST_TRANSCRIPT'"
+                echo "[ci-monitor-hook] Warning: Using latest transcript file: '$LATEST_TRANSCRIPT'" >&2
+                TRANSCRIPT_PATH="$LATEST_TRANSCRIPT"
+                ;;
+            1)
+                warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
+                echo "[ci-monitor-hook] Warning: Transcript directory not found, skipping monitoring" >&2
+                safe_exit "Transcript directory not found, monitoring skipped" "approve"
+                ;;
+            2)
+                warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
+                echo "[ci-monitor-hook] Warning: No transcript files found, skipping monitoring" >&2
+                safe_exit "No transcript files found, monitoring skipped" "approve"
+                ;;
+            3)
+                warn_log "TRANSCRIPT" "Error accessing transcript files in directory: '$TRANSCRIPT_DIR'"
+                echo "[ci-monitor-hook] Warning: Error accessing transcript files, skipping monitoring" >&2
+                safe_exit "Error accessing transcript files, monitoring skipped" "approve"
+                ;;
+            *)
+                warn_log "TRANSCRIPT" "Unexpected error finding transcript files in directory: '$TRANSCRIPT_DIR'"
+                echo "[ci-monitor-hook] Warning: Unexpected error finding transcript files, skipping monitoring" >&2
+                safe_exit "Unexpected error finding transcript files, monitoring skipped" "approve"
+                ;;
+        esac
     else
         warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
         echo "[ci-monitor-hook] Warning: Transcript directory not found, skipping monitoring" >&2

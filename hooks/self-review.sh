@@ -15,6 +15,12 @@ PRINCIPLES=$(
 - 自ら git diff やコミット確認を行なって把握せよ
 - 作業完了したら REVIEW_COMPLETED とは発言せず、作業報告を行うこと
 - SubAgent のレビューの結果、問題がないと判断されたときのみ、REVIEW_COMPLETED とだけ発言せよ
+
+## レビュー観点:
+- YAGNI：今必要じゃない機能は作らない
+- DRY：同じコードを繰り返さない
+- KISS：シンプルに保つ
+- t-wada TDD：テスト駆動開発
 ----
 EOF
 )
