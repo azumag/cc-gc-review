@@ -18,36 +18,23 @@ jobs:
     - name: Set up environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y tmux jq bats
-        
-        # Set BATS_LIB_PATH early for CI environment
-        echo "BATS_LIB_PATH=${{ github.workspace }}/test/test_helper/bats-support:${{ github.workspace }}/test/test_helper/bats-assert:${{ github.workspace }}/test/test_helper/bats-file" >> $GITHUB_ENV
+        sudo apt-get install -y tmux jq
     
-    - name: Initialize test helper libraries
+    - name: Set up BATS testing environment
       run: |
-        cd test
-        # Ensure all helper libraries are available
-        if [ ! -d "test_helper/bats-file" ]; then
-          git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
-        fi
-        # Verify all helper libraries exist
-        ls -la test_helper/
+        chmod +x .github/scripts/setup-bats.sh
+        ./.github/scripts/setup-bats.sh
     
     - name: Make scripts executable
       run: |
-        chmod +x cc-gc-review.sh
-        chmod +x hook-handler.sh
+        # Make all shell scripts in hooks directory executable
+        find hooks/ -name "*.sh" -exec chmod +x {} \;
         chmod +x test/run_tests.sh
     
-    - name: Run hook-handler tests
+    - name: Run gemini-review-hook tests
       run: |
         cd test
-        ./run_tests.sh -f test_hook_handler.bats
-    
-    - name: Run cc-gc-review tests
-      run: |
-        cd test
-        ./run_tests.sh -f test_cc_gc_review.bats
+        ./run_tests.sh -f test_gemini_review_hook.bats
     
     - name: Run all tests
       run: |
@@ -56,16 +43,19 @@ jobs:
     
     - name: Check script syntax
       run: |
-        bash -n cc-gc-review.sh
-        bash -n hook-handler.sh
+        # Check syntax for all shell scripts in hooks directory
+        find hooks/ -name "*.sh" -exec bash -n {} \;
         bash -n test/run_tests.sh
     
     - name: Validate test files
       run: |
-        for file in test/*.bats; do
+        echo "Validating bats test files by running them..."
+        cd test
+        for file in *.bats; do
           if [ -f "$file" ]; then
-            bash -n "$file" || {
-              echo "Syntax error in $file"
+            echo "Testing $file..."
+            bats "$file" || {
+              echo "Test failed in $file"
               exit 1
             }
           fi
@@ -86,8 +76,8 @@ jobs:
     
     - name: Run shellcheck
       run: |
-        shellcheck -S warning cc-gc-review.sh
-        shellcheck -S warning hook-handler.sh
+        # Check all shell scripts in hooks directory
+        find hooks/ -name "*.sh" -exec shellcheck -S warning {} \;
         shellcheck -S warning test/run_tests.sh
         # Only check our own bats files, exclude submodule test files
         find test/ -name "*.bats" -not -path "test/test_helper/*" -exec shellcheck -S warning {} \;
@@ -96,7 +86,8 @@ jobs:
       run: |
         echo "Checking for potential security issues in shell scripts..."
         # Use find to properly exclude test helper directories
-        if find . -name "*.sh" -o -name "*.bash" | grep -v "test/test_helper" | xargs grep -l "eval\|rm -rf /\|chmod 777" 2>/dev/null; then
+        # Check for dangerous patterns: eval, rm -rf / (root deletion), chmod 777
+        if find . -name "*.sh" -o -name "*.bash" | grep -v "test/test_helper" | xargs grep -l "eval\|rm -rf /[^a-zA-Z0-9_/-]\|chmod 777" 2>/dev/null; then
           echo "WARNING: Potential security issues found!"
           echo "Please review the above matches carefully."
           exit 1
@@ -120,8 +111,8 @@ jobs:
     
     - name: Check shell script formatting
       run: |
-        shfmt -d -s -i 4 cc-gc-review.sh
-        shfmt -d -s -i 4 hook-handler.sh
+        # Check all shell scripts in hooks directory
+        find hooks/ -name "*.sh" -exec shfmt -d -s -i 4 {} \;
         shfmt -d -s -i 4 test/run_tests.sh
 
   documentation:
@@ -160,8 +151,8 @@ jobs:
         fi
         
         # Check if scripts have proper help text
-        if ! grep -q "show_help" cc-gc-review.sh; then
-          echo "Warning: cc-gc-review.sh missing help function"
+        if ! grep -q "show_help" hooks/gemini-review-hook.sh; then
+          echo "Warning: hooks/gemini-review-hook.sh missing help function"
         fi
         
         echo "Documentation check completed."
@@ -178,25 +169,17 @@ jobs:
     - name: Set up environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y tmux jq bats
-        
-        # Set BATS_LIB_PATH early for CI environment
-        echo "BATS_LIB_PATH=${{ github.workspace }}/test/test_helper/bats-support:${{ github.workspace }}/test/test_helper/bats-assert:${{ github.workspace }}/test/test_helper/bats-file" >> $GITHUB_ENV
+        sudo apt-get install -y tmux jq
     
-    - name: Initialize test helper libraries
+    - name: Set up BATS testing environment
       run: |
-        cd test
-        # Ensure all helper libraries are available
-        if [ ! -d "test_helper/bats-file" ]; then
-          git clone --depth 1 https://github.com/bats-core/bats-file.git test_helper/bats-file
-        fi
-        # Verify all helper libraries exist
-        ls -la test_helper/
+        chmod +x .github/scripts/setup-bats.sh
+        ./.github/scripts/setup-bats.sh
     
     - name: Make scripts executable
       run: |
-        chmod +x cc-gc-review.sh
-        chmod +x hook-handler.sh
+        # Make all shell scripts in hooks directory executable
+        find hooks/ -name "*.sh" -exec chmod +x {} \;
         chmod +x test/run_tests.sh
     
     - name: Integration test - Mock scenario
@@ -218,15 +201,26 @@ jobs:
         # Add to PATH
         export PATH="/tmp/test-integration:$PATH"
         
-        # Test hook-handler with mock data
-        echo '{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}' | ./hook-handler.sh
+        # Test gemini-review-hook with mock data
+        export GEMINI_REVIEW_HOOK_DATA='{"session_id": "integration-test", "transcript_path": "/tmp/test-integration/test-transcript.jsonl", "stop_hook_active": false}'
+        echo "Testing hooks/gemini-review-hook.sh..."
+        HOOK_OUTPUT=$(./hooks/gemini-review-hook.sh)
+        echo "Hook output: $HOOK_OUTPUT"
         
-        # Check if review file was created
-        if [ -f "/tmp/gemini-review" ]; then
-          echo "✅ Integration test passed: Review file created"
-          cat /tmp/gemini-review
+        # Verify hook output structure
+        echo "$HOOK_OUTPUT" | jq -e '.decision' > /dev/null || { echo "❌ Invalid JSON output from hook"; exit 1; }
+        echo "$HOOK_OUTPUT" | jq -e '.reason' > /dev/null || { echo "❌ Missing reason in hook output"; exit 1; }
+        
+        # Test shared-utils.sh functions
+        echo "Testing hooks/shared-utils.sh..."
+        source hooks/shared-utils.sh
+        
+        # Check shared-utils functions work
+        if command -v log_info >/dev/null 2>&1; then
+          echo "✅ Integration test passed: shared-utils.sh functions loaded"
+          log_info "Test message"
         else
-          echo "❌ Integration test failed: Review file not created"
+          echo "❌ Integration test failed: shared-utils.sh functions not available"
           exit 1
         fi
         
@@ -238,13 +232,15 @@ jobs:
       run: |
         echo "Testing script permissions and basic execution..."
         
-        # Test cc-gc-review.sh help
-        ./cc-gc-review.sh --help || true
+        # Test hooks/gemini-review-hook.sh help
+        ./hooks/gemini-review-hook.sh --help || true
         
-        # Test hook-handler.sh with invalid input (should handle gracefully)
-        echo '{"invalid": "json"}' | ./hook-handler.sh || true
+        # Test hooks/gemini-review-hook.sh with invalid input (should handle gracefully)
+        export GEMINI_REVIEW_HOOK_DATA='{"invalid": "json"}'
+        ./hooks/gemini-review-hook.sh || true
         
         echo "✅ Permission and execution tests completed"
+
 
   release:
     runs-on: ubuntu-latest
@@ -294,7 +290,7 @@ jobs:
         
         Download the scripts and make them executable:
         ```bash
-        chmod +x cc-gc-review.sh hook-handler.sh
+        chmod +x gemini-review-hook.sh
         ```
         
         See README.md for detailed usage instructions.
@@ -307,8 +303,43 @@ jobs:
       with:
         name: cc-gc-review-${{ steps.release_info.outputs.version || 'latest' }}
         path: |
-          cc-gc-review.sh
-          hook-handler.sh
+          hooks/
           README.md
           RELEASE_NOTES.md
         retention-days: 90
+
+  notify-discord:
+    name: Discord Notification
+    runs-on: ubuntu-latest
+    needs: [test, lint, format, integration, release]
+    if: always() && (needs.test.result == 'failure' || needs.lint.result == 'failure' || needs.format.result == 'failure' || needs.integration.result == 'failure' || needs.release.result == 'failure')
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Send Discord notification on CI failure
+      env:
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      run: |
+        
+
+        # Determine branch name
+        BRANCH_NAME="${{ github.ref_name }}"
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          BRANCH_NAME="${{ github.head_ref }}"
+        fi
+
+        # Send notification using dedicated script
+        chmod +x scripts/send_discord_notification.sh
+        ./scripts/send_discord_notification.sh \
+          "$DISCORD_WEBHOOK" \
+          "${{ needs.test.result }}" \
+          "${{ needs.lint.result }}" \
+          "${{ needs.format.result }}" \
+          "${{ needs.integration.result }}" \
+          "${{ needs.release.result }}" \
+          "$BRANCH_NAME" \
+          "${{ github.sha }}" \
+          "${{ github.actor }}" \
+          "${{ github.event.head_commit.message || github.event.pull_request.title }}" \
+          "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

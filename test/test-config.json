@@ -1,0 +1,35 @@
+{
+  "shell_tests": [
+    {
+      "file": "test_notification_core.sh",
+      "description": "Notification core tests",
+      "category": "notification",
+      "timeout": 60,
+      "required_dependencies": ["jq", "curl"]
+    },
+    {
+      "file": "test_gemini_content_only.sh", 
+      "description": "Gemini hook integration tests",
+      "category": "gemini",
+      "timeout": 30,
+      "required_dependencies": ["jq"]
+    },
+    {
+      "file": "test_notification_examples.sh",
+      "description": "Notification workflow examples", 
+      "category": "notification",
+      "timeout": 45,
+      "required_dependencies": ["jq", "curl"]
+    }
+  ],
+  "error_patterns": {
+    "critical": ["assertion failed", "Test failed", "FATAL", "CRITICAL"],
+    "errors": ["Error:", "✗", "FAIL", "Failed"],
+    "warnings": ["WARN", "Warning", "⚠️"]
+  },
+  "output_limits": {
+    "max_error_lines": 10,
+    "max_error_indicators": 5,
+    "max_failed_cases": 3
+  }
+}

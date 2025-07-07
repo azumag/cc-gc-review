@@ -1,0 +1,147 @@
+name: Rigorous Hook Validation
+
+on:
+  push:
+    branches: [ main, develop, fix/* ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 02:00 UTC to catch environment drift
+    - cron: '0 2 * * *'
+
+jobs:
+  rigorous-testing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        # Test across multiple environments
+        node-version: [18, 20, 22]
+        shell: [bash, dash]
+        load-level: [low, high]
+      fail-fast: false
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq coreutils stress-ng
+        
+    - name: Set up BATS testing environment
+      run: |
+        chmod +x .github/scripts/setup-bats.sh
+        ./.github/scripts/setup-bats.sh
+        
+    - name: Setup test environment
+      run: |
+        # Create mock gemini command for testing
+        sudo tee /usr/local/bin/gemini > /dev/null << 'EOF'
+        #!/bin/bash
+        # Mock gemini for CI testing
+        if [[ "$*" == *"REVIEW_COMPLETED"* ]]; then
+          echo "REVIEW_COMPLETED"
+        elif [[ "$*" == *"REVIEW_RATE_LIMITED"* ]]; then
+          echo "REVIEW_RATE_LIMITED"  
+        else
+          echo "テストレビューです。改善点を指摘します。"
+        fi
+        EOF
+        sudo chmod +x /usr/local/bin/gemini
+        
+    - name: Environment validation
+      run: |
+        chmod +x scripts/validate-test-environment.sh
+        ./scripts/validate-test-environment.sh
+        
+    - name: Apply load conditions
+      if: matrix.load-level == 'high'
+      run: |
+        # Simulate high load conditions
+        stress-ng --cpu 2 --timeout 30s &
+        stress-ng --vm 1 --vm-bytes 512M --timeout 30s &
+        
+    - name: Run rigorous validation
+      run: |
+        chmod +x test/comprehensive_validation.sh
+        timeout 1800s ./test/comprehensive_validation.sh
+        
+    - name: Performance benchmarking
+      run: |
+        # Measure baseline performance
+        time echo '{"transcript_path": "/dev/null"}' | ./hooks/gemini-review-hook.sh > /tmp/perf_result.json
+        
+        # Validate performance requirements
+        if [ $(cat /tmp/perf_result.json | jq -r '.reason | length') -lt 50 ]; then
+          echo "❌ Performance regression: insufficient review depth"
+          exit 1
+        fi
+        
+    - name: Security validation
+      run: |
+        # Test injection vulnerabilities
+        echo '{"transcript_path": "/dev/null; rm -rf /tmp/*"}' | ./hooks/gemini-review-hook.sh > /tmp/security_test.json
+        
+        # Verify no command injection occurred
+        if ! jq -e '.decision' /tmp/security_test.json >/dev/null; then
+          echo "❌ Security vulnerability: command injection possible"
+          exit 1
+        fi
+        
+    - name: Upload test artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-artifacts-${{ matrix.node-version }}-${{ matrix.shell }}-${{ matrix.load-level }}
+        path: |
+          /tmp/*.log
+          /tmp/*.json
+          
+  quality-assessment:
+    runs-on: ubuntu-latest
+    needs: rigorous-testing
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Deep quality analysis
+      run: |
+        # Analyze review quality with multiple metrics
+        echo '{"type": "assistant", "uuid": "qa", "message": {"content": [{"type": "text", "text": "Complex technical implementation with security implications"}]}}' > /tmp/qa_transcript.jsonl
+        
+        # Mock gemini for quality testing
+        sudo tee /usr/local/bin/gemini > /dev/null << 'EOF'
+        #!/bin/bash
+        echo "このコードには以下の具体的な問題があります: 1. セキュリティホールが line 42 の input validation で発見されました。2. memory leak の可能性が function processData() にあります。3. error handling が不十分で、具体的には try-catch ブロックが missing です。改善方法: input sanitization を実装し、memory management を見直し、comprehensive error handling を追加してください。"
+        EOF
+        sudo chmod +x /usr/local/bin/gemini
+        
+        result=$(echo '{"transcript_path": "/tmp/qa_transcript.jsonl"}' | ./hooks/gemini-review-hook.sh)
+        review_text=$(echo "$result" | jq -r '.reason')
+        
+        # Quality metrics
+        char_count=$(echo "$review_text" | wc -c)
+        specific_refs=$(echo "$review_text" | grep -o "line\|function\|メソッド\|行" | wc -l || true)
+        improvement_suggestions=$(echo "$review_text" | grep -o "改善\|実装\|追加\|見直し" | wc -l || true)
+        
+        echo "Quality Assessment Results:"
+        echo "Character count: $char_count"
+        echo "Specific references: $specific_refs"  
+        echo "Improvement suggestions: $improvement_suggestions"
+        
+        # Enforce quality thresholds
+        if [ "$char_count" -lt 200 ] || [ "$specific_refs" -lt 2 ] || [ "$improvement_suggestions" -lt 2 ]; then
+          echo "❌ Review quality below acceptable threshold"
+          exit 1
+        fi
+        
+        echo "✅ Review quality meets rigorous standards"

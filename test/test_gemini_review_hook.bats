@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 
-load test_helper/bats-support/load.bash
-load test_helper/bats-assert/load.bash
-load test_helper/bats-file/load.bash
+# Load unified test helper
+load test_helper
 
 # Helper function for extracting Claude summary
 extract_claude_summary() {
@@ -36,7 +35,7 @@ setup() {
 EOF
 
     # Invalid JSON
-    echo '{"invalid": json}' > "$INVALID_TRANSCRIPT"
+    echo 'invalid json' > "$INVALID_TRANSCRIPT"
 }
 
 cleanup_test_env() {
@@ -46,8 +45,6 @@ cleanup_test_env() {
 teardown() {
     cleanup_test_env
 }
-
-# Trap will be set within each test
 
 @test "CLAUDE_SUMMARY extraction from valid transcript" {
     # Test the jq command directly
