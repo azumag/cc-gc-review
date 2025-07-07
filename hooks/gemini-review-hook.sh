@@ -27,8 +27,7 @@ readonly GEMINI_TIMEOUT=300
 
 # Debug log configuration (only when debug mode is enabled)
 if [ "$DEBUG_MODE" = "true" ]; then
-    LOG_DIR=$(mktemp -d -t gemini-review-hook-XXXXXX)
-    readonly LOG_DIR
+    readonly LOG_DIR="/tmp"
     readonly LOG_FILE="${LOG_DIR}/gemini-review-hook.log"
     readonly ERROR_LOG_FILE="${LOG_DIR}/gemini-review-error.log"
     # Output log directory for user reference
@@ -40,11 +39,9 @@ cleanup() {
     [ -n "${TEMP_STDOUT:-}" ] && rm -f "$TEMP_STDOUT"
     [ -n "${TEMP_STDERR:-}" ] && rm -f "$TEMP_STDERR"
 
-    # Clean up debug log directory (only if debug mode was enabled)
-    if [ "$DEBUG_MODE" = "true" ] && [ -n "${LOG_DIR:-}" ]; then
+    # Debug logs are preserved in /tmp for post-process debugging
+    if [ "$DEBUG_MODE" = "true" ]; then
         echo "[gemini-review-hook] Debug logs preserved at: $LOG_DIR" >&2
-        # Note: Not removing LOG_DIR to allow post-process debugging
-        # User can manually clean up /tmp/gemini-review-hook-* directories
     fi
 }
 
@@ -54,12 +51,12 @@ log_message() {
     local stage="$2"
     local message="$3"
 
-    # Only log when debug mode is enabled
-    if [ "$DEBUG_MODE" = "true" ]; then
-        local timestamp
-        timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
-        local log_entry="$timestamp [$level] [$stage] $message"
+    # Always log errors and warnings to /tmp for debugging, even when debug mode is off
+    local timestamp
+    timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
+    local log_entry="$timestamp [$level] [$stage] $message"
 
+    if [ "$DEBUG_MODE" = "true" ]; then
         # Log to main log file
         echo "$log_entry" >>"$LOG_FILE"
 
@@ -70,6 +67,11 @@ log_message() {
 
         # Also output to stderr for immediate visibility in debug mode
         echo "$log_entry" >&2
+    else
+        # Even without debug mode, log errors and warnings for troubleshooting
+        if [ "$level" = "ERROR" ] || [ "$level" = "WARN" ]; then
+            echo "$log_entry" >>"/tmp/gemini-review-hook-error.log"
+        fi
     fi
 }
 
@@ -320,6 +322,43 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
         ERROR_REASON="$ERROR_REASON. Error: $ERROR_OUTPUT"
     fi
     exit 0
+fi
+
+# Check for empty GEMINI_REVIEW and handle appropriately
+if [[ -z "$GEMINI_REVIEW" ]]; then
+    warn_log "REVIEW" "Empty review detected, analyzing failure cause"
+    
+    # Determine failure cause for better user feedback
+    FAILURE_CAUSE="不明なエラー"
+    if [[ ! -f "$TEMP_STDOUT" ]]; then
+        FAILURE_CAUSE="一時ファイル作成に失敗"
+        error_log "REVIEW" "Temporary stdout file not found: $TEMP_STDOUT"
+    elif [[ ! -f "$TEMP_STDERR" ]]; then
+        FAILURE_CAUSE="一時ファイル作成に失敗"
+        error_log "REVIEW" "Temporary stderr file not found: $TEMP_STDERR"
+    elif [[ -s "$TEMP_STDERR" ]]; then
+        # Error output exists, check for common patterns
+        ERROR_CONTENT=$(cat "$TEMP_STDERR" 2>/dev/null)
+        if [[ "$ERROR_CONTENT" =~ "command not found" ]]; then
+            FAILURE_CAUSE="gemini-cliがインストールされていません"
+        elif [[ "$ERROR_CONTENT" =~ "authentication" ]] || [[ "$ERROR_CONTENT" =~ "auth" ]]; then
+            FAILURE_CAUSE="認証エラー（gemini-cliの認証が必要です）"
+        elif [[ "$ERROR_CONTENT" =~ "network" ]] || [[ "$ERROR_CONTENT" =~ "connection" ]]; then
+            FAILURE_CAUSE="ネットワークエラー"
+        else
+            FAILURE_CAUSE="Geminiサービスエラー: ${ERROR_CONTENT:0:100}"
+        fi
+        error_log "REVIEW" "Error output detected: $ERROR_CONTENT"
+    elif [[ $GEMINI_EXIT_CODE -eq 124 ]]; then
+        FAILURE_CAUSE="タイムアウト"
+        error_log "REVIEW" "Timeout detected (exit code 124)"
+    elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
+        FAILURE_CAUSE="Gemini実行エラー (終了コード: $GEMINI_EXIT_CODE)"
+        error_log "REVIEW" "Non-zero exit code: $GEMINI_EXIT_CODE"
+    fi
+    
+    GEMINI_REVIEW="レビューの取得に失敗しました。原因: $FAILURE_CAUSE"
+    warn_log "REVIEW" "Set fallback review message: $GEMINI_REVIEW"
 fi
 
 # Check if review indicates completion or rate limiting
