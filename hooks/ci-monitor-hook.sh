@@ -57,9 +57,12 @@ get_workflow_run_details() {
 # Function to format CI failure details
 format_ci_failure() {
     local run_data="$1"
-    local run_url=$(echo "$run_data" | jq -r '.[0].url // "Unknown"')
-    local run_name=$(echo "$run_data" | jq -r '.[0].name // "Unknown workflow"')
-    local conclusion=$(echo "$run_data" | jq -r '.[0].conclusion // "failure"')
+    local run_url
+    run_url=$(echo "$run_data" | jq -r '.[0].url // "Unknown"')
+    local run_name
+    run_name=$(echo "$run_data" | jq -r '.[0].name // "Unknown workflow"')
+    local conclusion
+    conclusion=$(echo "$run_data" | jq -r '.[0].conclusion // "failure"')
 
     cat <<EOF
 ## CI Check Failed
@@ -82,8 +85,10 @@ EOF
 
 # Main monitoring logic
 monitor_ci() {
-    local branch=$(get_current_branch)
-    local start_time=$(date +%s)
+    local branch
+    branch=$(get_current_branch)
+    local start_time
+    start_time=$(date +%s)
     local delay=$INITIAL_DELAY
 
     echo "Monitoring CI status for branch: $branch" >&2
@@ -92,7 +97,8 @@ monitor_ci() {
     echo "Monitoring CI status for branch: $branch" > "$log_dir/ci_monitor.log"
 
     while true; do
-        local current_time=$(date +%s)
+        local current_time
+        current_time=$(date +%s)
         local elapsed=$((current_time - start_time))
 
         # Check if we've exceeded max wait time
@@ -128,9 +134,12 @@ monitor_ci() {
         local failed_runs=()
         
         while IFS= read -r run; do
-            local run_id=$(echo "$run" | jq -r '.databaseId')
-            local status=$(echo "$run" | jq -r '.status')
-            local conclusion=$(echo "$run" | jq -r '.conclusion // "null"')
+            local run_id
+            run_id=$(echo "$run" | jq -r '.databaseId')
+            local status
+            status=$(echo "$run" | jq -r '.status')
+            local conclusion
+            conclusion=$(echo "$run" | jq -r '.conclusion // "null"')
             
             case "$status" in
             "completed")
@@ -162,8 +171,10 @@ monitor_ci() {
         # If any runs failed, report failure
         if [ "$any_failed" = true ]; then
             # Format failure message using the first failed run
-            local failure_message=$(format_ci_failure "$(echo "${failed_runs[0]}" | jq -s '.')")
-            local escaped_message=$(echo "$failure_message" | jq -Rs .)
+            local failure_message
+            failure_message=$(format_ci_failure "$(echo "${failed_runs[0]}" | jq -s '.')")
+            local escaped_message
+            escaped_message=$(echo "$failure_message" | jq -Rs .)
 
             cat <<EOF
 {

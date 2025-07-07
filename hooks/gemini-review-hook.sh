@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Parse command line arguments
 DEBUG_MODE=false
 while [[ $# -gt 0 ]]; do
@@ -25,9 +27,11 @@ readonly GEMINI_TIMEOUT=300
 
 # Debug log configuration (only when debug mode is enabled)
 if [ "$DEBUG_MODE" = "true" ]; then
-    readonly LOG_DIR="/tmp"
+    readonly LOG_DIR=$(mktemp -d -t gemini-review-hook-XXXXXX)
     readonly LOG_FILE="${LOG_DIR}/gemini-review-hook.log"
     readonly ERROR_LOG_FILE="${LOG_DIR}/gemini-review-error.log"
+    # Output log directory for user reference
+    echo "[gemini-review-hook] Debug logging enabled. Logs will be written to: $LOG_DIR" >&2
 fi
 
 # Cleanup function for temporary files
@@ -35,10 +39,11 @@ cleanup() {
     [ -n "${TEMP_STDOUT:-}" ] && rm -f "$TEMP_STDOUT"
     [ -n "${TEMP_STDERR:-}" ] && rm -f "$TEMP_STDERR"
 
-    # Clean up debug log files (only if debug mode was enabled)
-    if [ "${DEBUG_GEMINI_HOOK:-false}" = "true" ]; then
-        local log_dir="${GEMINI_HOOK_LOG_DIR:-/tmp}"
-        rm -f "$log_dir/gemini-review-hook-$$.log" "$log_dir/gemini-review-error-$$.log" "$log_dir/gemini-review-debug-$$.log"
+    # Clean up debug log directory (only if debug mode was enabled)
+    if [ "$DEBUG_MODE" = "true" ] && [ -n "${LOG_DIR:-}" ]; then
+        echo "[gemini-review-hook] Debug logs preserved at: $LOG_DIR" >&2
+        # Note: Not removing LOG_DIR to allow post-process debugging
+        # User can manually clean up /tmp/gemini-review-hook-* directories
     fi
 }
 
@@ -50,7 +55,8 @@ log_message() {
     
     # Only log when debug mode is enabled
     if [ "$DEBUG_MODE" = "true" ]; then
-        local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
+        local timestamp
+        timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
         local log_entry="$timestamp [$level] [$stage] $message"
         
         # Log to main log file
@@ -99,7 +105,7 @@ PRINCIPLES=$(
     cat <<'EOF'
 ## 原則
 Gemini のレビューにて改善点を指摘された場合は、その改善点に従って修正せよ。
-これ以上の改善点は特に無しとレビューをもらったときのみ「REVIEW_COMPLETED」とだけ発言せよ。
+レビュー内容に問題がなく、改善点がすべてクリアになった場合のみ「REVIEW_COMPLETED」とだけ発言せよ。
 レビュー内容が空、もしくは「REVIEW_RATE_LIMITED」とだけ書かれていた場合は、「REVIEW_RATE_LIMITED」とだけ発言せよ。
 EOF
 )
@@ -186,7 +192,7 @@ TEMP_STDERR=$(mktemp)
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
 if command -v timeout >/dev/null 2>&1; then
-    timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+    timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
     GEMINI_EXIT_CODE=$?
 else
     debug_log "GEMINI" "timeout command not available, using manual timeout handling"
@@ -263,7 +269,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 
     # Use shorter timeout for Flash model (it should be faster)
     if command -v timeout >/dev/null 2>&1; then
-        timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"
