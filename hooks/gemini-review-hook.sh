@@ -251,34 +251,7 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
     if [ -d "$TRANSCRIPT_DIR" ]; then
         LATEST_TRANSCRIPT=$(find_latest_transcript_in_dir "$TRANSCRIPT_DIR")
         find_exit=$?
-        
-        case $find_exit in
-            0)
-                warn_log "TRANSCRIPT" "Using latest transcript file instead: '$LATEST_TRANSCRIPT'"
-                echo "[gemini-review-hook] Warning: Using latest transcript file: '$LATEST_TRANSCRIPT'" >&2
-                TRANSCRIPT_PATH="$LATEST_TRANSCRIPT"
-                ;;
-            1)
-                warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
-                echo "[gemini-review-hook] Warning: Transcript directory not found, skipping review" >&2
-                safe_exit "Transcript directory not found, review skipped" "approve"
-                ;;
-            2)
-                warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
-                echo "[gemini-review-hook] Warning: No transcript files found, skipping review" >&2
-                safe_exit "No transcript files found, review skipped" "approve"
-                ;;
-            3)
-                warn_log "TRANSCRIPT" "Error accessing transcript files in directory: '$TRANSCRIPT_DIR'"
-                echo "[gemini-review-hook] Warning: Error accessing transcript files, skipping review" >&2
-                safe_exit "Error accessing transcript files, review skipped" "approve"
-                ;;
-            *)
-                warn_log "TRANSCRIPT" "Unexpected error finding transcript files in directory: '$TRANSCRIPT_DIR'"
-                echo "[gemini-review-hook] Warning: Unexpected error finding transcript files, skipping review" >&2
-                safe_exit "Unexpected error finding transcript files, review skipped" "approve"
-                ;;
-        esac
+        handle_transcript_find_result "$find_exit" "$LATEST_TRANSCRIPT" "gemini-review-hook" "review" "$TRANSCRIPT_DIR"
     else
         warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
         echo "[gemini-review-hook] Warning: Transcript directory not found, skipping review" >&2

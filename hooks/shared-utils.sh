@@ -94,43 +94,38 @@ find_latest_transcript_in_dir() {
     fi
     
     local latest_file
+    local temp_file
+    temp_file=$(mktemp)
+    
     # Use compatible stat command for both macOS and Linux
     if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
         # macOS/BSD stat
-        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>&1 | {
-            local stat_error=0
-            while read -r line; do
-                if echo "$line" | grep -q "stat:"; then
-                    [ "$debug_mode" = "true" ] && echo "DEBUG: stat error: $line" >&2
-                    stat_error=1
-                else
-                    echo "$line"
-                fi
-            done
-            return $stat_error
-        } | sort -rn | head -1 | cut -d' ' -f2-)
-        local stat_exit=$?
+        if find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>"$temp_file" | sort -rn | head -1 | cut -d' ' -f2- >"${temp_file}.result"; then
+            latest_file=$(cat "${temp_file}.result")
+        else
+            if [ "$debug_mode" = "true" ] && [ -s "$temp_file" ]; then
+                echo "DEBUG: stat command errors:" >&2
+                cat "$temp_file" >&2
+            fi
+            rm -f "$temp_file" "${temp_file}.result"
+            return 3
+        fi
     else
         # GNU stat (Linux)
-        latest_file=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>&1 | {
-            local stat_error=0
-            while read -r line; do
-                if echo "$line" | grep -q "stat:"; then
-                    [ "$debug_mode" = "true" ] && echo "DEBUG: stat error: $line" >&2
-                    stat_error=1
-                else
-                    echo "$line"
-                fi
-            done
-            return $stat_error
-        } | sort -rn | head -1 | cut -d' ' -f2-)
-        local stat_exit=$?
+        if find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>"$temp_file" | sort -rn | head -1 | cut -d' ' -f2- >"${temp_file}.result"; then
+            latest_file=$(cat "${temp_file}.result")
+        else
+            if [ "$debug_mode" = "true" ] && [ -s "$temp_file" ]; then
+                echo "DEBUG: stat command errors:" >&2
+                cat "$temp_file" >&2
+            fi
+            rm -f "$temp_file" "${temp_file}.result"
+            return 3
+        fi
     fi
     
-    if [ $stat_exit -ne 0 ]; then
-        [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed for files in: $transcript_dir" >&2
-        return 3
-    fi
+    # Clean up temporary files
+    rm -f "$temp_file" "${temp_file}.result"
     
     if [ -n "$latest_file" ] && [ -f "$latest_file" ]; then
         echo "$latest_file"
@@ -139,6 +134,51 @@ find_latest_transcript_in_dir() {
         [ "$debug_mode" = "true" ] && echo "DEBUG: No valid latest file found in: $transcript_dir" >&2
         return 2
     fi
+}
+
+# Function to handle transcript find result with standardized error messages
+# Usage: handle_transcript_find_result find_exit_code latest_transcript_path hook_name action_name
+# Parameters:
+#   find_exit_code: Exit code from find_latest_transcript_in_dir
+#   latest_transcript_path: Path returned by find_latest_transcript_in_dir (may be empty)
+#   hook_name: Name of the calling hook (e.g. "ci-monitor-hook", "gemini-review-hook")
+#   action_name: Action being performed (e.g. "monitoring", "review")
+# Returns: 0 if transcript found and path set in TRANSCRIPT_PATH, exits with safe_exit otherwise
+handle_transcript_find_result() {
+    local find_exit=$1
+    local latest_transcript=$2
+    local hook_name=$3
+    local action_name=$4
+    local transcript_dir=$5
+    
+    case $find_exit in
+        0)
+            warn_log "TRANSCRIPT" "Using latest transcript file instead: '$latest_transcript'"
+            echo "[$hook_name] Warning: Using latest transcript file: '$latest_transcript'" >&2
+            TRANSCRIPT_PATH="$latest_transcript"
+            return 0
+            ;;
+        1)
+            warn_log "TRANSCRIPT" "Transcript directory not found: '$transcript_dir'"
+            echo "[$hook_name] Warning: Transcript directory not found, skipping $action_name" >&2
+            safe_exit "Transcript directory not found, $action_name skipped" "approve"
+            ;;
+        2)
+            warn_log "TRANSCRIPT" "No transcript files found in directory: '$transcript_dir'"
+            echo "[$hook_name] Warning: No transcript files found, skipping $action_name" >&2
+            safe_exit "No transcript files found, $action_name skipped" "approve"
+            ;;
+        3)
+            warn_log "TRANSCRIPT" "Error accessing transcript files in directory: '$transcript_dir'"
+            echo "[$hook_name] Warning: Error accessing transcript files, skipping $action_name" >&2
+            safe_exit "Error accessing transcript files, $action_name skipped" "approve"
+            ;;
+        *)
+            warn_log "TRANSCRIPT" "Unexpected error finding transcript files in directory: '$transcript_dir'"
+            echo "[$hook_name] Warning: Unexpected error finding transcript files, skipping $action_name" >&2
+            safe_exit "Unexpected error finding transcript files, $action_name skipped" "approve"
+            ;;
+    esac
 }
 
 # Function to extract last assistant message from JSONL transcript
