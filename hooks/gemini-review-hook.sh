@@ -249,7 +249,14 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
     # Try to find the latest transcript file in the same directory
     TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
     if [ -d "$TRANSCRIPT_DIR" ]; then
-        LATEST_TRANSCRIPT=$(find "$TRANSCRIPT_DIR" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        # Use compatible stat command for both macOS and Linux
+        if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
+            # macOS/BSD stat
+            LATEST_TRANSCRIPT=$(find "$TRANSCRIPT_DIR" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        else
+            # GNU stat (Linux)
+            LATEST_TRANSCRIPT=$(find "$TRANSCRIPT_DIR" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        fi
         if [ -n "$LATEST_TRANSCRIPT" ] && [ -f "$LATEST_TRANSCRIPT" ]; then
             warn_log "TRANSCRIPT" "Using latest transcript file instead: '$LATEST_TRANSCRIPT'"
             echo "[gemini-review-hook] Warning: Using latest transcript file: '$LATEST_TRANSCRIPT'" >&2

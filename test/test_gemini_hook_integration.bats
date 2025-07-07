@@ -122,8 +122,9 @@ EOF
     # Should exit successfully without calling Gemini
     assert_success
     
-    # Should exit with no output (current behavior)
-    assert_output ""
+    # Should produce JSON output when review already completed
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'Review already completed'
 }
 
 @test "gemini-review-hook handles REVIEW_RATE_LIMITED correctly" {
@@ -139,8 +140,9 @@ EOF
     # Should exit successfully without calling Gemini
     assert_success
     
-    # Should exit with no output (current behavior)
-    assert_output ""
+    # Should produce JSON output when rate limited
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'Review rate limited'
 }
 
 @test "gemini-review-hook extracts correct message format" {

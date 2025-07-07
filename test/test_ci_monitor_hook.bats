@@ -100,8 +100,9 @@ EOF
     # Should succeed and complete monitoring
     assert_success
     
-    # Should not produce JSON output when CI passes
-    refute_output --partial "\"decision\""
+    # Should produce JSON output with approve decision when CI passes
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'All CI workflows passed successfully'
 }
 
 @test "ci-monitor-hook ignores non-matching messages" {
@@ -117,8 +118,9 @@ EOF
     # Should exit early without monitoring
     assert_success
     
-    # Should not produce any output
-    assert_output ""
+    # Should produce JSON output indicating marker not found
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'REVIEW_COMPLETED && PUSH_COMPLETED marker not found'
 }
 
 @test "ci-monitor-hook handles CI failure" {
@@ -157,11 +159,12 @@ EOF
     # Test the hook with perpetually in-progress CI
     run timeout 10s bash -c "echo '{\"transcript_path\": \"timeout_test_transcript.jsonl\"}' | ./ci-monitor-hook.sh"
     
-    # Should succeed (timeout reached)
-    assert_success
+    # Should fail (timeout reached)
+    assert_failure
     
-    # Should not produce JSON output (timeout exit)
-    refute_output --partial "\"decision\""
+    # Should produce JSON output with block decision when timeout
+    assert_output --partial '"decision": "block"'
+    assert_output --partial 'CI monitoring timeout reached'
 }
 
 @test "ci-monitor-hook handles missing gh CLI" {
@@ -179,8 +182,9 @@ EOF
     # Should exit gracefully
     assert_success
     
-    # Should not produce JSON output
-    refute_output --partial "\"decision\""
+    # Should produce JSON output when gh CLI not found
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'GitHub CLI (gh) not found'
 }
 
 @test "ci-monitor-hook handles empty input" {
@@ -190,8 +194,9 @@ EOF
     # Should exit gracefully
     assert_success
     
-    # Should not produce any output
-    assert_output ""
+    # Should produce JSON output when no session ID provided
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'No session ID'
 }
 
 @test "ci-monitor-hook handles CI cancelled" {
@@ -279,8 +284,9 @@ EOF
     # Should exit gracefully
     assert_success
     
-    # Should not produce any output
-    assert_output ""
+    # Should produce JSON output when transcript not found
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'No transcript files found'
 }
 
 @test "ci-monitor-hook handles unauthenticated gh CLI" {
@@ -309,8 +315,9 @@ EOF
     # Should exit gracefully
     assert_success
     
-    # Should not produce JSON output
-    refute_output --partial "\"decision\""
+    # Should produce JSON output when not authenticated
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'Not authenticated with GitHub CLI'
 }
 
 @test "ci-monitor-hook handles non-git repository" {
@@ -339,6 +346,7 @@ EOF
     # Should exit gracefully
     assert_success
     
-    # Should not produce JSON output
-    refute_output --partial "\"decision\""
+    # Should produce JSON output when not in git repo
+    assert_output --partial '"decision": "approve"'
+    assert_output --partial 'Not in a git repository'
 }
