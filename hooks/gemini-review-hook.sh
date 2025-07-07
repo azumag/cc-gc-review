@@ -27,7 +27,8 @@ readonly GEMINI_TIMEOUT=300
 
 # Debug log configuration (only when debug mode is enabled)
 if [ "$DEBUG_MODE" = "true" ]; then
-    readonly LOG_DIR=$(mktemp -d -t gemini-review-hook-XXXXXX)
+    LOG_DIR=$(mktemp -d -t gemini-review-hook-XXXXXX)
+    readonly LOG_DIR
     readonly LOG_FILE="${LOG_DIR}/gemini-review-hook.log"
     readonly ERROR_LOG_FILE="${LOG_DIR}/gemini-review-error.log"
     # Output log directory for user reference
@@ -192,7 +193,7 @@ TEMP_STDERR=$(mktemp)
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
 if command -v timeout >/dev/null 2>&1; then
-    timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+    timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
     GEMINI_EXIT_CODE=$?
 else
     debug_log "GEMINI" "timeout command not available, using manual timeout handling"
@@ -272,7 +273,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 
     # Use shorter timeout for Flash model (it should be faster)
     if command -v timeout >/dev/null 2>&1; then
-        timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$REVIEW_PROMPT\" | gemini -s -y --model=gemini-2.5-flash" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"
