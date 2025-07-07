@@ -18,7 +18,7 @@ assess_review_depth() {
 
     # 2. Specific code location references
     local line_refs
-    line_refs=$(echo "$review" | grep -c "行\|line\|関数\|function\|メソッド" || true)
+    line_refs=$(echo "$review" | grep -o "行\|line\|関数\|function\|メソッド" | wc -l || true)
     if [ "$line_refs" -ge 2 ]; then score=$((score + 1)); fi
 
     # 3. Solution proposal specificity

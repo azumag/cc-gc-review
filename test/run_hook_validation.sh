@@ -46,20 +46,20 @@ measure_review_quality() {
     # File mention check (git diff files referenced)
     if [ -n "$git_diff" ]; then
         local changed_files=$(echo "$git_diff" | grep "^diff --git" | wc -l)
-        local mentioned_files=$(echo "$review_text" | grep -c '\.sh\|\.js\|\.py\|\.md\|\.yml\|\.yaml' || true)
+        local mentioned_files=$(echo "$review_text" | grep -o '\.sh\|\.js\|\.py\|\.md\|\.yml\|\.yaml' | wc -l || true)
         if [ "$mentioned_files" -gt 0 ] && [ "$changed_files" -gt 0 ]; then
             ((score++))
         fi
     fi
 
     # Improvement suggestion check
-    local improvement_mentions=$(echo "$review_text" | grep -c '改善\|修正\|追加\|考慮\|検討' || true)
+    local improvement_mentions=$(echo "$review_text" | grep -o '改善\|修正\|追加\|考慮\|検討' | wc -l || true)
     if [ "$improvement_mentions" -ge 1 ]; then
         ((score++))
     fi
 
     # Specific technical terms
-    local tech_terms=$(echo "$review_text" | grep -c 'コード\|関数\|変数\|エラー\|テスト' || true)
+    local tech_terms=$(echo "$review_text" | grep -o 'コード\|関数\|変数\|エラー\|テスト' | wc -l || true)
     if [ "$tech_terms" -ge 2 ]; then
         ((score++))
     fi
