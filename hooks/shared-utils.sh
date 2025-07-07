@@ -114,12 +114,13 @@ find_latest_transcript_in_dir() {
     fi
     
     # Process the stat output to find the latest file
-    if [ -n "$stat_output" ]; then
-        latest_file=$(echo "$stat_output" | sort -rn | head -1 | cut -d' ' -f2-)
-    else
-        [ "$debug_mode" = "true" ] && echo "DEBUG: No stat output received" >&2
+    # Note: stat_output should not be empty here since we already verified files exist
+    if [ -z "$stat_output" ]; then
+        [ "$debug_mode" = "true" ] && echo "DEBUG: No stat output received despite files existing" >&2
         return 3
     fi
+    
+    latest_file=$(echo "$stat_output" | sort -rn | head -1 | cut -d' ' -f2-)
     
     if [ -n "$latest_file" ] && [ -f "$latest_file" ]; then
         echo "$latest_file"
