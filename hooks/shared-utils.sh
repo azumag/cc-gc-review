@@ -17,6 +17,16 @@ log_error() {
 }
 
 # Function to output safe JSON and exit with appropriate exit code
+# 
+# DESIGN RATIONALE - Consistent JSON Output Strategy:
+# This function ALWAYS outputs JSON to ensure uniform interface between hook scripts and CI systems.
+# Benefits:
+# - Consistent machine-readable output format across all hook exit scenarios
+# - Simplified parsing logic for CI systems and automation tools  
+# - Clear separation between human-readable logs (stderr) and structured data (stdout)
+# - Enables reliable automation and monitoring of hook execution results
+# - Future-proof interface that can be extended with additional metadata
+#
 # This ensures consistent JSON output and proper shell exit codes for CI systems
 safe_exit() {
     local reason="${1:-Script terminated safely}"
@@ -50,6 +60,26 @@ EOF
         exit 1
     else
         exit 0
+    fi
+}
+
+# Function to find latest transcript file using cross-platform stat command
+# Usage: find_latest_transcript_in_dir "directory_path"
+# Returns: path to the latest .jsonl file or empty string if none found
+find_latest_transcript_in_dir() {
+    local transcript_dir="$1"
+    
+    if [ ! -d "$transcript_dir" ]; then
+        return 1
+    fi
+    
+    # Use compatible stat command for both macOS and Linux
+    if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
+        # macOS/BSD stat
+        find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-
+    else
+        # GNU stat (Linux)
+        find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-
     fi
 }
 
