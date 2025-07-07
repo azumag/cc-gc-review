@@ -62,13 +62,19 @@ FAILED_JOBS=$(collect_failed_jobs "$TEST_RESULT" "$LINT_RESULT" "$FORMAT_RESULT"
 create_discord_payload() {
     # Properly escape JSON values
     # FAILED_JOBS already contains proper newlines from collect_failed_jobs
-    local failed_jobs_json=$(echo -n "${FAILED_JOBS}" | jq -R -s '.')
-    local branch_json=$(echo -n "${BRANCH}" | jq -R -s '.')
+    local failed_jobs_json
+    failed_jobs_json=$(echo -n "${FAILED_JOBS}" | jq -R -s '.')
+    local branch_json
+    branch_json=$(echo -n "${BRANCH}" | jq -R -s '.')
     local commit_short="${SHA:0:7}"
-    local commit_json=$(echo -n "${commit_short}" | jq -R -s '.')
-    local actor_json=$(echo -n "${ACTOR}" | jq -R -s '.')
-    local message_json=$(echo -n "${COMMIT_MESSAGE}" | jq -R -s '.')
-    local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+    local commit_json
+    commit_json=$(echo -n "${commit_short}" | jq -R -s '.')
+    local actor_json
+    actor_json=$(echo -n "${ACTOR}" | jq -R -s '.')
+    local message_json
+    message_json=$(echo -n "${COMMIT_MESSAGE}" | jq -R -s '.')
+    local timestamp
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 
     cat <<EOF
 {

@@ -67,6 +67,8 @@ case "$1" in
             echo "test-branch"
         elif [ "$2" = "--git-dir" ]; then
             echo ".git"
+        elif [ "$2" = "HEAD" ]; then
+            echo "abc123def456789"
         fi
         ;;
     *)
@@ -90,7 +92,7 @@ teardown() {
 EOF
 
     # Set up successful CI response
-    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "success", "databaseId": "123", "name": "CI Tests", "url": "https://github.com/test/repo/actions/runs/123"}]'
+    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "success", "databaseId": "123", "name": "CI Tests", "headSha": "abc123def456789", "url": "https://github.com/test/repo/actions/runs/123"}]'
     
     # Test the hook with matching message
     run timeout 10s bash -c "echo '{\"transcript_path\": \"matching_transcript.jsonl\"}' | ./ci-monitor-hook.sh"
@@ -126,7 +128,7 @@ EOF
 EOF
 
     # Set up failed CI response
-    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "failure", "databaseId": "456", "name": "CI Tests", "url": "https://github.com/test/repo/actions/runs/456"}]'
+    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "failure", "databaseId": "456", "name": "CI Tests", "headSha": "abc123def456789", "url": "https://github.com/test/repo/actions/runs/456"}]'
     
     # Test the hook with failed CI
     run timeout 10s bash -c "echo '{\"transcript_path\": \"failure_transcript.jsonl\"}' | ./ci-monitor-hook.sh"
@@ -147,7 +149,7 @@ EOF
 EOF
 
     # Set up perpetually in-progress CI response
-    export GH_RUN_LIST_RESPONSE='[{"status": "in_progress", "conclusion": null, "databaseId": "222", "name": "Long Running Test", "url": "https://github.com/test/repo/actions/runs/222"}]'
+    export GH_RUN_LIST_RESPONSE='[{"status": "in_progress", "conclusion": null, "databaseId": "222", "name": "Long Running Test", "headSha": "abc123def456789", "url": "https://github.com/test/repo/actions/runs/222"}]'
     
     # Modify the CI monitor hook to have a very short timeout for testing
     sed -i.bak 's/MAX_WAIT_TIME=300/MAX_WAIT_TIME=3/' ci-monitor-hook.sh
@@ -199,7 +201,7 @@ EOF
 EOF
 
     # Set up cancelled CI response
-    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "cancelled", "databaseId": "789", "name": "Build Process", "url": "https://github.com/test/repo/actions/runs/789"}]'
+    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "cancelled", "databaseId": "789", "name": "Build Process", "headSha": "abc123def456789", "url": "https://github.com/test/repo/actions/runs/789"}]'
     
     # Test the hook with cancelled CI
     run timeout 10s bash -c "echo '{\"transcript_path\": \"cancelled_transcript.jsonl\"}' | ./ci-monitor-hook.sh"
@@ -222,7 +224,7 @@ EOF
 EOF
 
     # Set up timed out CI response
-    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "timed_out", "databaseId": "999", "name": "Test Suite", "url": "https://github.com/test/repo/actions/runs/999"}]'
+    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "timed_out", "databaseId": "999", "name": "Test Suite", "headSha": "abc123def456789", "url": "https://github.com/test/repo/actions/runs/999"}]'
     
     # Test the hook with timed out CI
     run timeout 10s bash -c "echo '{\"transcript_path\": \"timeout_transcript.jsonl\"}' | ./ci-monitor-hook.sh"
@@ -245,7 +247,7 @@ EOF
 EOF
 
     # Set up failed CI response with specific details
-    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "failure", "databaseId": "444", "name": "Format Test Workflow", "url": "https://github.com/test/repo/actions/runs/444"}]'
+    export GH_RUN_LIST_RESPONSE='[{"status": "completed", "conclusion": "failure", "databaseId": "444", "name": "Format Test Workflow", "headSha": "abc123def456789", "url": "https://github.com/test/repo/actions/runs/444"}]'
     
     # Test the hook with failed CI
     run timeout 10s bash -c "echo '{\"transcript_path\": \"format_test_transcript.jsonl\"}' | ./ci-monitor-hook.sh"
