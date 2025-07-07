@@ -173,11 +173,30 @@ EOF
 {"type": "assistant", "uuid": "assistant-001", "message": {"content": [{"type": "text", "text": "REVIEW_COMPLETED && PUSH_COMPLETED"}]}}
 EOF
 
-    # Remove gh from PATH
-    export PATH="/usr/bin:/bin"
+    # Create a fake gh command that exits with "command not found"
+    mkdir -p "$TEST_DIR/fake_bin"
+    export PATH="$TEST_DIR/fake_bin:$PATH"
     
-    # Test the hook without gh CLI
-    run bash -c "echo '{\"transcript_path\": \"missing_gh_transcript.jsonl\"}' | ./ci-monitor-hook.sh"
+    # Create a mock gh that simulates command not found
+    cat > "$TEST_DIR/fake_bin/gh" << 'EOF'
+#!/bin/bash
+# Mock gh that simulates "command not found"
+exit 127
+EOF
+    chmod +x "$TEST_DIR/fake_bin/gh"
+    
+    # Override command -v behavior by creating a function in the test environment
+    run bash -c "
+        command() {
+            if [[ \$1 == '-v' && \$2 == 'gh' ]]; then
+                return 1
+            else
+                builtin command \"\$@\"
+            fi
+        }
+        export -f command
+        echo '{\"transcript_path\": \"missing_gh_transcript.jsonl\"}' | ./ci-monitor-hook.sh
+    "
     
     # Should exit gracefully
     assert_success
