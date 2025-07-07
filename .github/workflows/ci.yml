@@ -299,7 +299,7 @@ jobs:
         echo "Release notes created."
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: cc-gc-review-${{ steps.release_info.outputs.version || 'latest' }}
         path: |
