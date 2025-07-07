@@ -184,7 +184,7 @@ EOF
     
     # Should produce JSON output when gh CLI not found
     assert_output --partial '"decision": "approve"'
-    assert_output --partial 'GitHub CLI (gh) not found'
+    assert_output --partial 'GitHub CLI (gh) not found. CI monitoring disabled.'
 }
 
 @test "ci-monitor-hook handles empty input" {

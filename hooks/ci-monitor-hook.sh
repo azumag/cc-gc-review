@@ -179,7 +179,7 @@ debug_log "TRANSCRIPT" "Transcript file found after ${WAIT_COUNT}s wait"
 if [ -f "$TRANSCRIPT_PATH" ]; then
     debug_log "TRANSCRIPT" "Transcript file found, extracting last messages"
     debug_log "TRANSCRIPT" "File size: $(wc -l < "$TRANSCRIPT_PATH") lines"
-    debug_log "TRANSCRIPT" "File last modified: $(stat -f "%Sm" "$TRANSCRIPT_PATH")"
+    debug_log "TRANSCRIPT" "File last modified: $(if stat -f "%Sm" /dev/null >/dev/null 2>&1; then stat -f "%Sm" "$TRANSCRIPT_PATH"; else stat -c "%y" "$TRANSCRIPT_PATH"; fi)"
     
     LAST_MESSAGE=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 0 true)
     debug_log "TRANSCRIPT" "Extracted message length: ${#LAST_MESSAGE} characters"
