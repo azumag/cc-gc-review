@@ -74,3 +74,51 @@ teardown() {
     assert_equal "$status" 0
     assert_output --partial "target.jsonl"
 }
+
+@test "find_latest_transcript_in_dir returns 3 when stat command fails" {
+    mkdir stat_fail_dir
+    touch stat_fail_dir/test.jsonl
+    
+    # Create a mock stat command that fails
+    export PATH="$TEST_DIR:$PATH"
+    cat > stat << 'EOF'
+#!/bin/bash
+# Mock stat that always fails with specific error pattern
+echo "stat: cannot access files" >&2
+exit 1
+EOF
+    chmod +x stat
+    
+    # Test with debug mode to see the error message
+    HOOK_DEBUG=true run find_latest_transcript_in_dir "stat_fail_dir"
+    assert_equal "$status" 3
+    
+    # The mock stat command causes empty output, triggering the "No stat output received" path
+    # This is the expected behavior when stat command fails
+    assert_output --partial "DEBUG: No stat output received despite files existing"
+}
+
+@test "find_latest_transcript_in_dir handles empty stat output gracefully" {
+    mkdir empty_stat_dir
+    touch empty_stat_dir/test.jsonl
+    
+    # Create a mock find command that succeeds but produces no output
+    export PATH="$TEST_DIR:$PATH"
+    cat > find << 'EOF'
+#!/bin/bash
+# Mock find that succeeds but produces no output for stat
+if [[ "$*" == *"-exec stat"* ]]; then
+    # Simulate successful find but empty stat output
+    exit 0
+else
+    # Normal find behavior for file existence check
+    exec /usr/bin/find "$@"
+fi
+EOF
+    chmod +x find
+    
+    # Test with debug mode
+    HOOK_DEBUG=true run find_latest_transcript_in_dir "empty_stat_dir"
+    assert_equal "$status" 3
+    assert_output --partial "DEBUG: No stat output received despite files existing"
+}
