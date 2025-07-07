@@ -27,7 +27,6 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
         exit 0
     fi
 
-    # REVIEW_COMPLETEDが含まれているときのみ実行
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "REVIEW_COMPLETED"; then
         cat <<EOF
 {

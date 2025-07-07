@@ -158,15 +158,126 @@ INPUT=$(cat)
 info_log "START" "Script started, input received"
 info_log "INPUT" "Received input: $INPUT"
 
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id')
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path')
+debug_log "TRANSCRIPT" "Processing session_id: $SESSION_ID"
 debug_log "TRANSCRIPT" "Processing transcript path: $TRANSCRIPT_PATH"
+debug_log "TRANSCRIPT" "Raw input JSON: $INPUT"
+debug_log "TRANSCRIPT" "File existence check: $(test -f "$TRANSCRIPT_PATH" && echo "EXISTS" || echo "NOT_FOUND")"
+
+# Validate session ID consistency
+validate_session_id() {
+    local expected_session_id="$1"
+    local transcript_path="$2"
+    
+    # Extract session ID from transcript path
+    local path_session_id
+    path_session_id=$(basename "$transcript_path" .jsonl)
+    
+    debug_log "SESSION_VALIDATION" "Expected session ID: $expected_session_id"
+    debug_log "SESSION_VALIDATION" "Path-derived session ID: $path_session_id"
+    
+    if [ "$expected_session_id" != "$path_session_id" ]; then
+        warn_log "SESSION_VALIDATION" "Session ID mismatch: expected=$expected_session_id, path=$path_session_id"
+        return 1
+    fi
+    
+    debug_log "SESSION_VALIDATION" "Session ID validation passed"
+    return 0
+}
+
+# Exit early if session ID or transcript path is null or empty
+if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "null" ]; then
+    warn_log "SESSION" "Session ID is null or empty, skipping review"
+    echo "[gemini-review-hook] Warning: No session ID provided, skipping review" >&2
+    exit 0
+fi
+
+if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
+    warn_log "TRANSCRIPT" "Transcript path is null or empty, skipping review"
+    echo "[gemini-review-hook] Warning: No transcript path provided, skipping review" >&2
+    exit 0
+fi
+
+# Validate session ID consistency before proceeding
+if ! validate_session_id "$SESSION_ID" "$TRANSCRIPT_PATH"; then
+    warn_log "SESSION_VALIDATION" "Session ID validation failed, attempting to find correct transcript"
+    echo "[gemini-review-hook] Warning: Session ID mismatch detected" >&2
+    
+    # Try to find the correct transcript file for this session
+    TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
+    CORRECT_TRANSCRIPT="$TRANSCRIPT_DIR/$SESSION_ID.jsonl"
+    
+    if [ -f "$CORRECT_TRANSCRIPT" ]; then
+        warn_log "SESSION_VALIDATION" "Found correct transcript for session: $CORRECT_TRANSCRIPT"
+        echo "[gemini-review-hook] Using correct transcript file: $CORRECT_TRANSCRIPT" >&2
+        TRANSCRIPT_PATH="$CORRECT_TRANSCRIPT"
+    else
+        warn_log "SESSION_VALIDATION" "Correct transcript not found: $CORRECT_TRANSCRIPT"
+        echo "[gemini-review-hook] Warning: Correct transcript file not found, will continue with original path" >&2
+    fi
+fi
+
+# Wait for transcript file to be created (up to 10 seconds)
+WAIT_COUNT=0
+MAX_WAIT=10
+while [ ! -f "$TRANSCRIPT_PATH" ] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+    debug_log "TRANSCRIPT" "Waiting for transcript file to be created (attempt $((WAIT_COUNT + 1))/$MAX_WAIT)"
+    sleep 1
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+done
+
+# If file still doesn't exist after waiting, try to find the latest transcript file
+if [ ! -f "$TRANSCRIPT_PATH" ]; then
+    warn_log "TRANSCRIPT" "Specified transcript file not found: '$TRANSCRIPT_PATH'"
+    
+    # Try to find the latest transcript file in the same directory
+    TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
+    if [ -d "$TRANSCRIPT_DIR" ]; then
+        LATEST_TRANSCRIPT=$(find "$TRANSCRIPT_DIR" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        if [ -n "$LATEST_TRANSCRIPT" ] && [ -f "$LATEST_TRANSCRIPT" ]; then
+            warn_log "TRANSCRIPT" "Using latest transcript file instead: '$LATEST_TRANSCRIPT'"
+            echo "[gemini-review-hook] Warning: Using latest transcript file: '$LATEST_TRANSCRIPT'" >&2
+            TRANSCRIPT_PATH="$LATEST_TRANSCRIPT"
+        else
+            warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
+            echo "[gemini-review-hook] Warning: No transcript files found, skipping review" >&2
+            exit 0
+        fi
+    else
+        warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
+        echo "[gemini-review-hook] Warning: Transcript directory not found, skipping review" >&2
+        exit 0
+    fi
+fi
+
+debug_log "TRANSCRIPT" "Transcript file found after ${WAIT_COUNT}s wait"
+
 if [ -f "$TRANSCRIPT_PATH" ]; then
     debug_log "TRANSCRIPT" "Transcript file found, extracting last messages"
-    LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 100 false)
+    debug_log "TRANSCRIPT" "File size: $(wc -l < "$TRANSCRIPT_PATH") lines"
+    debug_log "TRANSCRIPT" "File last modified: $(stat -f "%Sm" "$TRANSCRIPT_PATH")"
+    
+    LAST_MESSAGES=$(extract_last_assistant_message "$TRANSCRIPT_PATH" 0 true)
+    debug_log "TRANSCRIPT" "Extracted message length: ${#LAST_MESSAGES} characters"
+    
+    if [ -z "$LAST_MESSAGES" ]; then
+        debug_log "TRANSCRIPT" "No assistant messages found in transcript"
+        # Try to check what's actually in the file
+        debug_log "TRANSCRIPT" "Last 3 lines of transcript:"
+        tail -3 "$TRANSCRIPT_PATH" | while read -r line; do
+            debug_log "TRANSCRIPT" "Line: $line"
+        done
+    else
+        debug_log "TRANSCRIPT" "First 100 chars of extracted message: ${LAST_MESSAGES:0:100}"
+    fi
+    
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$REVIEW_COMPLETED_MARKER"; then
+        debug_log "TRANSCRIPT" "Found REVIEW_COMPLETED marker, exiting"
         exit 0
     fi
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$RATE_LIMITED_RESPONSE"; then
+        debug_log "TRANSCRIPT" "Found RATE_LIMITED marker, exiting"
         exit 0
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
