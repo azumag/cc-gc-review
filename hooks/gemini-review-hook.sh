@@ -186,11 +186,16 @@ validate_session_id() {
     return 0
 }
 
-# Exit early if session ID or transcript path is null or empty
+# Handle backwards compatibility - if session_id is not provided, derive it from transcript path
 if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "null" ]; then
-    warn_log "SESSION" "Session ID is null or empty, skipping review"
-    echo "[gemini-review-hook] Warning: No session ID provided, skipping review" >&2
-    exit 0
+    if [ -n "$TRANSCRIPT_PATH" ] && [ "$TRANSCRIPT_PATH" != "null" ]; then
+        SESSION_ID=$(basename "$TRANSCRIPT_PATH" .jsonl)
+        debug_log "SESSION" "Session ID derived from transcript path: $SESSION_ID"
+    else
+        warn_log "SESSION" "No session ID or transcript path provided, skipping review"
+        echo "[gemini-review-hook] Warning: No session ID or transcript path provided, skipping review" >&2
+        exit 0
+    fi
 fi
 
 if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
@@ -199,23 +204,28 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
     exit 0
 fi
 
-# Validate session ID consistency before proceeding
-if ! validate_session_id "$SESSION_ID" "$TRANSCRIPT_PATH"; then
-    warn_log "SESSION_VALIDATION" "Session ID validation failed, attempting to find correct transcript"
-    echo "[gemini-review-hook] Warning: Session ID mismatch detected" >&2
-    
-    # Try to find the correct transcript file for this session
-    TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
-    CORRECT_TRANSCRIPT="$TRANSCRIPT_DIR/$SESSION_ID.jsonl"
-    
-    if [ -f "$CORRECT_TRANSCRIPT" ]; then
-        warn_log "SESSION_VALIDATION" "Found correct transcript for session: $CORRECT_TRANSCRIPT"
-        echo "[gemini-review-hook] Using correct transcript file: $CORRECT_TRANSCRIPT" >&2
-        TRANSCRIPT_PATH="$CORRECT_TRANSCRIPT"
-    else
-        warn_log "SESSION_VALIDATION" "Correct transcript not found: $CORRECT_TRANSCRIPT"
-        echo "[gemini-review-hook] Warning: Correct transcript file not found, will continue with original path" >&2
+# Only validate session ID consistency if we have both session_id and transcript_path from input
+# Skip validation for backwards compatibility when session_id was derived from transcript_path
+if echo "$INPUT" | jq -e '.session_id' >/dev/null 2>&1; then
+    if ! validate_session_id "$SESSION_ID" "$TRANSCRIPT_PATH"; then
+        warn_log "SESSION_VALIDATION" "Session ID validation failed, attempting to find correct transcript"
+        echo "[gemini-review-hook] Warning: Session ID mismatch detected" >&2
+        
+        # Try to find the correct transcript file for this session
+        TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
+        CORRECT_TRANSCRIPT="$TRANSCRIPT_DIR/$SESSION_ID.jsonl"
+        
+        if [ -f "$CORRECT_TRANSCRIPT" ]; then
+            warn_log "SESSION_VALIDATION" "Found correct transcript for session: $CORRECT_TRANSCRIPT"
+            echo "[gemini-review-hook] Using correct transcript file: $CORRECT_TRANSCRIPT" >&2
+            TRANSCRIPT_PATH="$CORRECT_TRANSCRIPT"
+        else
+            warn_log "SESSION_VALIDATION" "Correct transcript not found: $CORRECT_TRANSCRIPT"
+            echo "[gemini-review-hook] Warning: Correct transcript file not found, will continue with original path" >&2
+        fi
     fi
+else
+    debug_log "SESSION_VALIDATION" "No session_id in input, skipping validation (backwards compatibility)"
 fi
 
 # Wait for transcript file to be created (up to 10 seconds)
