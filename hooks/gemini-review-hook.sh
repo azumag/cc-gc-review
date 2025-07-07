@@ -493,7 +493,7 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
     if [ -n "$ERROR_OUTPUT" ]; then
         ERROR_REASON="$ERROR_REASON. Error: $ERROR_OUTPUT"
     fi
-    safe_exit "$ERROR_REASON" "allow"
+    safe_exit "$ERROR_REASON" "block"
 fi
 
 # Check for empty GEMINI_REVIEW and handle appropriately

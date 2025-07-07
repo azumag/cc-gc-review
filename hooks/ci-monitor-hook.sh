@@ -71,6 +71,24 @@ info_log() { log_message "INFO" "$1" "$2"; }
 warn_log() { log_message "WARN" "$1" "$2"; }
 error_log() { log_message "ERROR" "$1" "$2"; }
 
+# Function to output safe JSON and exit
+safe_exit() {
+    local reason="${1:-Script terminated safely}"
+    local decision="${2:-allow}"
+    
+    # Safely escape the reason for JSON
+    local escaped_reason
+    escaped_reason=$(echo "$reason" | jq -Rs .)
+    
+    cat <<EOF
+{
+  "decision": "$decision",
+  "reason": $escaped_reason
+}
+EOF
+    exit 0
+}
+
 # Read input
 INPUT=$(cat)
 info_log "START" "Script started, input received"
@@ -113,14 +131,14 @@ if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "null" ]; then
     else
         warn_log "SESSION" "No session ID or transcript path provided, skipping monitoring"
         echo "[ci-monitor-hook] Warning: No session ID or transcript path provided, skipping monitoring" >&2
-        exit 0
+        safe_exit "No session ID or transcript path provided, monitoring skipped" "allow"
     fi
 fi
 
 if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
     warn_log "TRANSCRIPT" "Transcript path is null or empty, skipping monitoring"
     echo "[ci-monitor-hook] Warning: No transcript path provided, skipping monitoring" >&2
-    exit 0
+    safe_exit "No transcript path provided, monitoring skipped" "allow"
 fi
 
 # Only validate session ID consistency if we have both session_id and transcript_path from input
@@ -170,12 +188,12 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
         else
             warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
             echo "[ci-monitor-hook] Warning: No transcript files found, skipping monitoring" >&2
-            exit 0
+            safe_exit "No transcript files found, monitoring skipped" "allow"
         fi
     else
         warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
         echo "[ci-monitor-hook] Warning: Transcript directory not found, skipping monitoring" >&2
-        exit 0
+        safe_exit "Transcript directory not found, monitoring skipped" "allow"
     fi
 fi
 
@@ -204,13 +222,13 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     
     if ! echo "$LAST_MESSAGE" | grep -q "REVIEW_COMPLETED && PUSH_COMPLETED"; then
         debug_log "TRANSCRIPT" "REVIEW_COMPLETED && PUSH_COMPLETED marker not found, exiting"
-        exit 0
+        safe_exit "REVIEW_COMPLETED && PUSH_COMPLETED marker not found" "allow"
     fi
     
     debug_log "TRANSCRIPT" "Found REVIEW_COMPLETED && PUSH_COMPLETED marker, continuing"
 else
     debug_log "TRANSCRIPT" "Transcript file not found or not accessible"
-    exit 0
+    safe_exit "Transcript file not found or not accessible" "allow"
 fi
 
 # Function to get current branch
@@ -291,7 +309,7 @@ monitor_ci() {
         if [ $elapsed -ge $MAX_WAIT_TIME ]; then
             echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" >&2
             echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" >"$log_dir/ci_monitor.log"
-            exit 0
+            safe_exit "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" "allow"
         fi
 
         # Get workflow runs
@@ -368,14 +386,14 @@ monitor_ci() {
   "reason": $escaped_message
 }
 EOF
-            exit 0
+            return 0
         fi
 
         # If all runs are completed and none failed, success
         if [ "$all_completed" = true ]; then
             echo "All CI workflows passed successfully!" >&2
             echo "All CI workflows passed successfully!" >"$log_dir/ci_monitor.log"
-            exit 0
+            safe_exit "All CI workflows passed successfully!" "allow"
         fi
 
         # Some runs are still in progress, continue monitoring
@@ -394,21 +412,21 @@ EOF
 if ! command -v gh &>/dev/null; then
     echo "Warning: GitHub CLI (gh) not found. CI monitoring disabled." >&2
     log_warning "GitHub CLI (gh) not found. CI monitoring disabled."
-    exit 0
+    safe_exit "GitHub CLI (gh) not found. CI monitoring disabled." "allow"
 fi
 
 # Check if we're authenticated with gh
 if ! gh auth status &>/dev/null; then
     echo "Warning: Not authenticated with GitHub CLI. CI monitoring disabled." >&2
     log_warning "Not authenticated with GitHub CLI. CI monitoring disabled."
-    exit 0
+    safe_exit "Not authenticated with GitHub CLI. CI monitoring disabled." "allow"
 fi
 
 # Check if we're in a git repository
 if ! git rev-parse --git-dir &>/dev/null; then
     echo "Warning: Not in a git repository. CI monitoring disabled." >&2
     log_warning "Not in a git repository. CI monitoring disabled."
-    exit 0
+    safe_exit "Not in a git repository. CI monitoring disabled." "allow"
 fi
 
 # Start monitoring
