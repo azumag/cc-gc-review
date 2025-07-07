@@ -274,8 +274,8 @@ setup_ci_environment() {
 setup_ci_environment
 
 # Batsヘルパーライブラリのパスを設定（CI/ローカル両方で）
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-export BATS_LIB_PATH="${SCRIPT_DIR}/test_helper/bats-support:${SCRIPT_DIR}/test_helper/bats-assert:${SCRIPT_DIR}/test_helper/bats-file:${BATS_LIB_PATH:-}"
+# Note: SCRIPT_DIR is already set as TEST_DIR above
+export BATS_LIB_PATH="${TEST_DIR}/test_helper/bats-support:${TEST_DIR}/test_helper/bats-assert:${TEST_DIR}/test_helper/bats-file:${BATS_LIB_PATH:-}"
 
 # 必要なツールの確認
 if ! command -v bats >/dev/null 2>&1; then

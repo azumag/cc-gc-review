@@ -66,7 +66,7 @@ PRINCIPLES=$(
 ## 原則
 Gemini のレビューにて改善点を指摘された場合は、その改善点に従って修正せよ。
 これ以上の改善点は特に無しとレビューをもらったときのみ「REVIEW_COMPLETED」とだけ発言せよ。
-レビュー内容が「REVIEW_RATE_LIMITED」とだけ書かれていた場合、「REVIEW_RATE_LIMITED」とだけ発言せよ。
+レビュー内容が空、もしくは「REVIEW_RATE_LIMITED」とだけ書かれていた場合は、「REVIEW_RATE_LIMITED」とだけ発言せよ。
 EOF
 )
 
@@ -89,7 +89,7 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     # Limit CLAUDE_SUMMARY to configured length to avoid token limit
     # Use character-aware truncation instead of byte-based to handle multibyte characters safely
     original_length=${#CLAUDE_SUMMARY}
-    if [ $original_length -gt $CLAUDE_SUMMARY_MAX_LENGTH ]; then
+    if [ "$original_length" -gt "$CLAUDE_SUMMARY_MAX_LENGTH" ]; then
         # Preserve important parts: first N chars + last N chars with separator
         FIRST_PART=$(printf "%.${CLAUDE_SUMMARY_PRESERVE_LENGTH}s" "$CLAUDE_SUMMARY")
         LAST_PART=$(echo "$CLAUDE_SUMMARY" | rev | cut -c1-${CLAUDE_SUMMARY_PRESERVE_LENGTH} | rev)
@@ -152,7 +152,7 @@ TEMP_STDERR=$(mktemp)
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
 if command -v timeout >/dev/null 2>&1; then
-    REVIEW_PROMPT="$REVIEW_PROMPT" timeout ${GEMINI_TIMEOUT}s bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+    timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
     GEMINI_EXIT_CODE=$?
 else
     debug_log "GEMINI" "timeout command not available, using manual timeout handling"
@@ -229,7 +229,7 @@ if [[ $IS_RATE_LIMIT == "true" ]]; then
 
     # Use shorter timeout for Flash model (it should be faster)
     if command -v timeout >/dev/null 2>&1; then
-        REVIEW_PROMPT="$REVIEW_PROMPT" timeout ${GEMINI_TIMEOUT}s bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$REVIEW_PROMPT" | gemini -s -y --model=gemini-2.5-flash' >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         GEMINI_EXIT_CODE=$?
     else
         debug_log "FLASH" "timeout command not available, using manual timeout handling"
@@ -280,7 +280,7 @@ fi
 DECISION="block"
 
 # Safely combine review and principles, handling potential JSON content in GEMINI_REVIEW
-COMBINED_CONTENT=$(printf "%s\n\n%s" "$GEMINI_REVIEW" "$PRINCIPLES")
+COMBINED_CONTENT=$(printf "%s\n\n%s" "レビュー内容：$GEMINI_REVIEW" "$PRINCIPLES")
 COMBINED_REASON=$(echo "$COMBINED_CONTENT" | jq -Rs .)
 
 cat <<EOF

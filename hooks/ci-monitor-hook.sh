@@ -35,12 +35,12 @@ get_current_branch() {
     git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main"
 }
 
-# Function to get latest workflow run for current branch
-get_latest_workflow_run() {
+# Function to get active workflow runs for current branch
+get_active_workflow_runs() {
     local branch="$1"
 
-    # Get workflow runs for the current branch
-    if ! gh run list --branch "$branch" --limit 1 --json status,conclusion,databaseId,name,headSha,url 2>/dev/null; then
+    # Get all active workflow runs for the current branch (in_progress, queued, etc.)
+    if ! gh run list --branch "$branch" --limit 10 --json status,conclusion,databaseId,name,headSha,url 2>/dev/null; then
         return 1
     fi
 }
@@ -85,9 +85,9 @@ monitor_ci() {
     local branch=$(get_current_branch)
     local start_time=$(date +%s)
     local delay=$INITIAL_DELAY
-    local last_run_id=""
 
     echo "Monitoring CI status for branch: $branch" >&2
+    echo "Monitoring CI status for branch: $branch" > /tmp/ci_monitor.log
 
     while true; do
         local current_time=$(date +%s)
@@ -96,13 +96,15 @@ monitor_ci() {
         # Check if we've exceeded max wait time
         if [ $elapsed -ge $MAX_WAIT_TIME ]; then
             echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" >&2
+            echo "CI monitoring timeout reached after ${MAX_WAIT_TIME}s" > /tmp/ci_monitor.log
             exit 0
         fi
 
-        # Get latest workflow run
+        # Get workflow runs
         local run_data
-        if ! run_data=$(get_latest_workflow_run "$branch"); then
+        if ! run_data=$(get_active_workflow_runs "$branch"); then
             echo "Warning: Failed to fetch workflow runs (network error)" >&2
+            echo "Warning: Failed to fetch workflow runs (network error)" > /tmp/ci_monitor.log
             sleep $delay
             # Increase delay with exponential backoff
             delay=$((delay * 2))
@@ -113,54 +115,73 @@ monitor_ci() {
         # Check if there are any runs
         if [ "$(echo "$run_data" | jq '. | length')" -eq 0 ]; then
             echo "No workflow runs found for branch $branch" >&2
+            echo "No workflow runs found for branch $branch" > /tmp/ci_monitor.log
             sleep $delay
             continue
         fi
 
-        # Get run details
-        local run_id=$(echo "$run_data" | jq -r '.[0].databaseId')
-        local status=$(echo "$run_data" | jq -r '.[0].status')
-        local conclusion=$(echo "$run_data" | jq -r '.[0].conclusion // "null"')
-
-        # Check if this is a new run
-        if [ "$run_id" != "$last_run_id" ]; then
-            last_run_id="$run_id"
-            echo "Found workflow run: $run_id (status: $status)" >&2
-        fi
-
-        # Check run status
-        case "$status" in
-        "completed")
-            case "$conclusion" in
-            "success")
-                echo "CI passed successfully!" >&2
-                exit 0
+        # Check all workflow runs status
+        local all_completed=true
+        local any_failed=false
+        local failed_runs=()
+        
+        while IFS= read -r run; do
+            local run_id=$(echo "$run" | jq -r '.databaseId')
+            local status=$(echo "$run" | jq -r '.status')
+            local conclusion=$(echo "$run" | jq -r '.conclusion // "null"')
+            
+            case "$status" in
+            "completed")
+                case "$conclusion" in
+                "success")
+                    # This run passed, continue checking others
+                    ;;
+                "failure" | "cancelled" | "timed_out")
+                    any_failed=true
+                    failed_runs+=("$run")
+                    ;;
+                *)
+                    # Other conclusion (e.g., skipped), continue monitoring
+                    all_completed=false
+                    ;;
+                esac
                 ;;
-            "failure" | "cancelled" | "timed_out")
-                # CI failed, format and return decision block
-                local failure_message=$(format_ci_failure "$run_data")
-                local escaped_message=$(echo "$failure_message" | jq -Rs .)
+            "in_progress" | "queued" | "requested" | "waiting" | "pending")
+                all_completed=false
+                ;;
+            *)
+                echo "Unknown workflow status: $status for run $run_id" >&2
+                echo "Unknown workflow status: $status for run $run_id" > /tmp/ci_monitor.log
+                all_completed=false
+                ;;
+            esac
+        done < <(echo "$run_data" | jq -c '.[]')
 
-                cat <<EOF
+        # If any runs failed, report failure
+        if [ "$any_failed" = true ]; then
+            # Format failure message using the first failed run
+            local failure_message=$(format_ci_failure "$(echo "${failed_runs[0]}" | jq -s '.')")
+            local escaped_message=$(echo "$failure_message" | jq -Rs .)
+
+            cat <<EOF
 {
   "decision": "block",
   "reason": $escaped_message
 }
 EOF
-                exit 0
-                ;;
-            *)
-                # Other conclusion, continue monitoring
-                ;;
-            esac
-            ;;
-        "in_progress" | "queued" | "requested" | "waiting" | "pending")
-            # Still running, continue monitoring
-            ;;
-        *)
-            echo "Unknown workflow status: $status" >&2
-            ;;
-        esac
+            exit 0
+        fi
+
+        # If all runs are completed and none failed, success
+        if [ "$all_completed" = true ]; then
+            echo "All CI workflows passed successfully!" >&2
+            echo "All CI workflows passed successfully!" > /tmp/ci_monitor.log
+            exit 0
+        fi
+
+        # Some runs are still in progress, continue monitoring
+        echo "Some workflows still in progress, continuing to monitor..." >&2
+        echo "Some workflows still in progress, continuing to monitor..." > /tmp/ci_monitor.log
 
         # Wait before next check
         sleep $delay
@@ -173,18 +194,21 @@ EOF
 # Check if gh CLI is available
 if ! command -v gh &>/dev/null; then
     echo "Warning: GitHub CLI (gh) not found. CI monitoring disabled." >&2
+    echo "Warning: GitHub CLI (gh) not found. CI monitoring disabled." > /tmp/ci_monitor.log
     exit 0
 fi
 
 # Check if we're authenticated with gh
 if ! gh auth status &>/dev/null; then
     echo "Warning: Not authenticated with GitHub CLI. CI monitoring disabled." >&2
+    echo "Warning: Not authenticated with GitHub CLI. CI monitoring disabled." > /tmp/ci_monitor.log
     exit 0
 fi
 
 # Check if we're in a git repository
 if ! git rev-parse --git-dir &>/dev/null; then
     echo "Warning: Not in a git repository. CI monitoring disabled." >&2
+    echo "Warning: Not in a git repository. CI monitoring disabled." > /tmp/ci_monitor.log
     exit 0
 fi
 
