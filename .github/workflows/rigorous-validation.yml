@@ -130,8 +130,8 @@ jobs:
         
         # Quality metrics
         char_count=$(echo "$review_text" | wc -c)
-        specific_refs=$(echo "$review_text" | grep -c "line\|function\|メソッド\|行" || true)
-        improvement_suggestions=$(echo "$review_text" | grep -c "改善\|実装\|追加\|見直し" || true)
+        specific_refs=$(echo "$review_text" | grep -o "line\|function\|メソッド\|行" | wc -l || true)
+        improvement_suggestions=$(echo "$review_text" | grep -o "改善\|実装\|追加\|見直し" | wc -l || true)
         
         echo "Quality Assessment Results:"
         echo "Character count: $char_count"

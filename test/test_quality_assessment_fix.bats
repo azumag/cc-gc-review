@@ -33,18 +33,18 @@ Consider adding proper error handling and improved logging."
 
 @test "comprehensive_validation.sh uses fixed counting method" {
     # Verify the comprehensive validation script uses the fixed method
-    grep -q "grep -o.*| wc -l" "./comprehensive_validation.sh"
+    grep -q "grep -o.*| wc -l" "comprehensive_validation.sh"
     
     # Verify the specific line uses the new method
-    grep -q "grep -o \"行\|line\|関数\|function\|メソッド\" | wc -l" "./comprehensive_validation.sh"
+    grep -q "grep -o \"行\|line\|関数\|function\|メソッド\" | wc -l" "comprehensive_validation.sh"
 }
 
 @test "run_hook_validation.sh uses fixed counting method" {
     # Verify the run hook validation script uses the fixed method
-    grep -q "grep -o.*| wc -l" "./run_hook_validation.sh"
+    grep -q "grep -o.*| wc -l" "run_hook_validation.sh"
     
     # Check that all grep -c patterns were replaced with grep -o | wc -l
-    file_mentions=$(grep -c "grep -c" "./run_hook_validation.sh" || true)
+    file_mentions=$(grep -c "grep -c" "run_hook_validation.sh" || true)
     
     # Should be 0 occurrences of grep -c for pattern matching
     [ "$file_mentions" -eq 0 ]
