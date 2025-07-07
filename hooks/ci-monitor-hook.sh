@@ -35,12 +35,15 @@ get_current_branch() {
     git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main"
 }
 
-# Function to get active workflow runs for current branch
+# Function to get active workflow runs for current branch and commit
 get_active_workflow_runs() {
     local branch="$1"
+    local current_sha
+    current_sha=$(git rev-parse HEAD)
 
-    # Get all active workflow runs for the current branch (in_progress, queued, etc.)
-    if ! gh run list --branch "$branch" --limit 10 --json status,conclusion,databaseId,name,headSha,url 2>/dev/null; then
+    # Get all workflow runs for the current branch and filter by current commit
+    if ! gh run list --branch "$branch" --limit 20 --json status,conclusion,databaseId,name,headSha,url 2>/dev/null | \
+         jq --arg sha "$current_sha" '[.[] | select(.headSha == $sha)]'; then
         return 1
     fi
 }
