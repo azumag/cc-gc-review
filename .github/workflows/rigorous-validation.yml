@@ -76,8 +76,18 @@ jobs:
         
     - name: Performance benchmarking
       run: |
+        # Create test transcript for benchmarking
+        echo '{"type": "assistant", "uuid": "test", "message": {"content": [{"type": "text", "text": "Test performance message"}]}}' > /tmp/perf_transcript.jsonl
+        
+        # Mock gemini for performance testing
+        sudo tee /usr/local/bin/gemini > /dev/null << 'EOF'
+        #!/bin/bash
+        echo "Performance test: code review completed with standard analysis"
+        EOF
+        sudo chmod +x /usr/local/bin/gemini
+        
         # Measure baseline performance
-        time echo '{"transcript_path": "/dev/null"}' | ./hooks/gemini-review-hook.sh > /tmp/perf_result.json
+        time echo '{"transcript_path": "/tmp/perf_transcript.jsonl"}' | ./hooks/gemini-review-hook.sh > /tmp/perf_result.json
         
         # Validate performance requirements
         if [ $(cat /tmp/perf_result.json | jq -r '.reason | length') -lt 50 ]; then
