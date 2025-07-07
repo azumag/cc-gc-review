@@ -197,6 +197,9 @@ if command -v timeout >/dev/null 2>&1; then
 else
     debug_log "GEMINI" "timeout command not available, using manual timeout handling"
     >&2 echo "[gemini-review-hook] Warning: timeout command not available, using manual timeout handling"
+
+    echo "$REVIEW_PROMPT" >> $LOG_FILE
+
     # Manual timeout management
     echo "$REVIEW_PROMPT" | gemini -s -y >"$TEMP_STDOUT" 2>"$TEMP_STDERR" &
     GEMINI_PID=$!
