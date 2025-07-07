@@ -75,30 +75,36 @@ teardown() {
     assert_output --partial "target.jsonl"
 }
 
-@test "find_latest_transcript_in_dir returns 3 when stat command fails" {
-    mkdir stat_fail_dir
-    touch stat_fail_dir/test.jsonl
+@test "find_latest_transcript_in_dir provides detailed error messages" {
+    mkdir error_test_dir
+    touch error_test_dir/test.jsonl
     
-    # Create a mock stat command that fails
+    # Create a scenario that will definitely trigger an error by mocking find to fail
     export PATH="$TEST_DIR:$PATH"
-    cat > stat << 'EOF'
+    cat > find << 'EOF'
 #!/bin/bash
-# Mock stat that always fails with specific error pattern
-echo "stat: cannot access files" >&2
-exit 1
+# Mock find that fails when executing stat
+if [[ "$*" == *"-exec stat"* ]]; then
+    echo "find: stat failed: No such file or directory" >&2
+    exit 1
+else
+    # Normal find behavior for file existence check
+    exec /usr/bin/find "$@"
+fi
 EOF
-    chmod +x stat
+    chmod +x find
     
-    # Test with debug mode to see the error message
-    HOOK_DEBUG=true run find_latest_transcript_in_dir "stat_fail_dir"
+    # Test with debug mode
+    HOOK_DEBUG=true run find_latest_transcript_in_dir "error_test_dir"
     assert_equal "$status" 3
     
-    # The mock stat command causes empty output, triggering the "No stat output received" path
-    # This is the expected behavior when stat command fails
-    assert_output --partial "DEBUG: No stat output received despite files existing"
+    # Should contain detailed error information in debug message
+    assert_output --partial "DEBUG: stat command failed on"
+    assert_output --partial "(exit code: 1):"
+    assert_output --partial "No such file or directory"
 }
 
-@test "find_latest_transcript_in_dir handles empty stat output gracefully" {
+@test "find_latest_transcript_in_dir handles successful stat with empty output" {
     mkdir empty_stat_dir
     touch empty_stat_dir/test.jsonl
     
@@ -108,7 +114,7 @@ EOF
 #!/bin/bash
 # Mock find that succeeds but produces no output for stat
 if [[ "$*" == *"-exec stat"* ]]; then
-    # Simulate successful find but empty stat output
+    # Simulate successful find but empty stat output (exit 0 but no output)
     exit 0
 else
     # Normal find behavior for file existence check
@@ -117,8 +123,11 @@ fi
 EOF
     chmod +x find
     
-    # Test with debug mode
+    # Test with debug mode - this should trigger the "succeeded but no output" message
     HOOK_DEBUG=true run find_latest_transcript_in_dir "empty_stat_dir"
     assert_equal "$status" 3
-    assert_output --partial "DEBUG: No stat output received despite files existing"
+    
+    # Should contain the specific message for successful command with empty output
+    assert_output --partial "DEBUG: stat command succeeded but produced no output despite files existing in:"
+    assert_output --partial "empty_stat_dir"
 }

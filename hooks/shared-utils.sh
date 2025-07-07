@@ -95,28 +95,44 @@ find_latest_transcript_in_dir() {
     
     local latest_file
     
-    # Use compatible stat command for both macOS and Linux with robust error handling
+    # Use compatible stat command for both macOS and Linux with detailed error reporting
     local stat_output
     local stat_errors
+    local temp_stderr
+    temp_stderr=$(mktemp)
     
     if stat -f "%m %N" /dev/null >/dev/null 2>&1; then
         # macOS/BSD stat
-        if ! stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>/dev/null); then
-            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on macOS" >&2
+        stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -f "%m %N" {} \; 2>"$temp_stderr")
+        local stat_exit_code=$?
+        
+        if [ $stat_exit_code -ne 0 ]; then
+            local error_msg
+            error_msg=$(cat "$temp_stderr" 2>/dev/null)
+            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on macOS (exit code: $stat_exit_code): $error_msg" >&2
+            rm -f "$temp_stderr"
             return 3
         fi
     else
         # GNU stat (Linux)
-        if ! stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>/dev/null); then
-            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on Linux" >&2
+        stat_output=$(find "$transcript_dir" -name "*.jsonl" -type f -exec stat -c "%Y %n" {} \; 2>"$temp_stderr")
+        local stat_exit_code=$?
+        
+        if [ $stat_exit_code -ne 0 ]; then
+            local error_msg
+            error_msg=$(cat "$temp_stderr" 2>/dev/null)
+            [ "$debug_mode" = "true" ] && echo "DEBUG: stat command failed on Linux (exit code: $stat_exit_code): $error_msg" >&2
+            rm -f "$temp_stderr"
             return 3
         fi
     fi
     
+    rm -f "$temp_stderr"
+    
     # Process the stat output to find the latest file
     # Note: stat_output should not be empty here since we already verified files exist
     if [ -z "$stat_output" ]; then
-        [ "$debug_mode" = "true" ] && echo "DEBUG: No stat output received despite files existing" >&2
+        [ "$debug_mode" = "true" ] && echo "DEBUG: stat command succeeded but produced no output despite files existing in: $transcript_dir" >&2
         return 3
     fi
     
