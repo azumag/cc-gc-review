@@ -155,6 +155,24 @@ get_user_friendly_error() {
     fi
 }
 
+# Function to output safe JSON and exit
+safe_exit() {
+    local reason="${1:-Script terminated safely}"
+    local decision="${2:-allow}"
+    
+    # Safely escape the reason for JSON
+    local escaped_reason
+    escaped_reason=$(echo "$reason" | jq -Rs .)
+    
+    cat <<EOF
+{
+  "decision": "$decision",
+  "reason": $escaped_reason
+}
+EOF
+    exit 0
+}
+
 # Set trap for cleanup on script exit
 trap cleanup EXIT
 
@@ -198,14 +216,14 @@ if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "null" ]; then
     else
         warn_log "SESSION" "No session ID or transcript path provided, skipping review"
         echo "[gemini-review-hook] Warning: No session ID or transcript path provided, skipping review" >&2
-        exit 0
+        safe_exit "No session ID or transcript path provided, review skipped" "allow"
     fi
 fi
 
 if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
     warn_log "TRANSCRIPT" "Transcript path is null or empty, skipping review"
     echo "[gemini-review-hook] Warning: No transcript path provided, skipping review" >&2
-    exit 0
+    safe_exit "No transcript path provided, review skipped" "allow"
 fi
 
 # Only validate session ID consistency if we have both session_id and transcript_path from input
@@ -256,12 +274,12 @@ if [ ! -f "$TRANSCRIPT_PATH" ]; then
         else
             warn_log "TRANSCRIPT" "No transcript files found in directory: '$TRANSCRIPT_DIR'"
             echo "[gemini-review-hook] Warning: No transcript files found, skipping review" >&2
-            exit 0
+            safe_exit "No transcript files found, review skipped" "allow"
         fi
     else
         warn_log "TRANSCRIPT" "Transcript directory not found: '$TRANSCRIPT_DIR'"
         echo "[gemini-review-hook] Warning: Transcript directory not found, skipping review" >&2
-        exit 0
+        safe_exit "Transcript directory not found, review skipped" "allow"
     fi
 fi
 
@@ -288,11 +306,11 @@ if [ -f "$TRANSCRIPT_PATH" ]; then
     
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$REVIEW_COMPLETED_MARKER"; then
         debug_log "TRANSCRIPT" "Found REVIEW_COMPLETED marker, exiting"
-        exit 0
+        safe_exit "Review already completed" "allow"
     fi
     if [ -n "$LAST_MESSAGES" ] && echo "$LAST_MESSAGES" | grep -q "$RATE_LIMITED_RESPONSE"; then
         debug_log "TRANSCRIPT" "Found RATE_LIMITED marker, exiting"
-        exit 0
+        safe_exit "Review rate limited" "allow"
     fi
     debug_log "TRANSCRIPT" "No exit conditions found, continuing"
 else
@@ -475,7 +493,7 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]]; then
     if [ -n "$ERROR_OUTPUT" ]; then
         ERROR_REASON="$ERROR_REASON. Error: $ERROR_OUTPUT"
     fi
-    exit 0
+    safe_exit "$ERROR_REASON" "allow"
 fi
 
 # Check for empty GEMINI_REVIEW and handle appropriately
