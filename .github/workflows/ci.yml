@@ -213,12 +213,6 @@ jobs:
         
         # Test shared-utils.sh functions
         echo "Testing hooks/shared-utils.sh..."
-        # TODO: Remove debug output after CI issue is resolved (temporary for log_info function investigation)
-        echo "Debug: Current directory: $(pwd)"
-        echo "Debug: shared-utils.sh exists: $(test -f hooks/shared-utils.sh && echo 'YES' || echo 'NO')"
-        echo "Debug: shared-utils.sh content (first 10 lines):"
-        head -10 hooks/shared-utils.sh || echo "Failed to read file"
-        
         source hooks/shared-utils.sh
         
         # Check shared-utils functions work
@@ -227,9 +221,6 @@ jobs:
           log_info "Test message"
         else
           echo "❌ Integration test failed: shared-utils.sh functions not available"
-          # TODO: Remove debug output after CI issue is resolved
-          echo "Debug: Available functions:"
-          declare -F | grep log || echo "No log functions found"
           exit 1
         fi
         

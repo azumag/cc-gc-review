@@ -49,14 +49,14 @@ extract_last_assistant_message() {
             # Get ALL text content from the last assistant message WITH TEXT
             # First find the UUID of the last assistant message that has text content
             local last_text_uuid
-            if ! last_text_uuid=$(cat "$transcript_path" | jq -r 'select(.type == "assistant" and (.message.content[]? | select(.type == "text"))) | .uuid' | tail -1); then
+            if ! last_text_uuid=$(jq -r 'select(.type == "assistant" and (.message.content[]? | select(.type == "text"))) | .uuid' < "$transcript_path" | tail -1); then
                 echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
                 return 1
             fi
 
             if [ -n "$last_text_uuid" ]; then
                 # Get all text content from that specific message, joined together
-                if ! result=$(cat "$transcript_path" | jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' | tr '\n' ' '); then
+                if ! result=$(jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' < "$transcript_path" | tr '\n' ' '); then
                     echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
                     return 1
                 fi
@@ -64,14 +64,14 @@ extract_last_assistant_message() {
         else
             # Get the last line of text content from the last assistant message with text content
             local last_text_uuid
-            if ! last_text_uuid=$(cat "$transcript_path" | jq -r 'select(.type == "assistant" and (.message.content[]? | select(.type == "text"))) | .uuid' | tail -1); then
+            if ! last_text_uuid=$(jq -r 'select(.type == "assistant" and (.message.content[]? | select(.type == "text"))) | .uuid' < "$transcript_path" | tail -1); then
                 echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
                 return 1
             fi
 
             if [ -n "$last_text_uuid" ]; then
                 # Get the last line of text content from that specific message
-                if ! result=$(cat "$transcript_path" | jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' | tail -1); then
+                if ! result=$(jq -r --arg uuid "$last_text_uuid" 'select(.type == "assistant" and .uuid == $uuid) | .message.content[] | select(.type == "text") | .text' < "$transcript_path" | tail -1); then
                     echo "Error: Failed to parse transcript JSON from '$transcript_path'" >&2
                     return 1
                 fi
