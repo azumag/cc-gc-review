@@ -91,10 +91,12 @@ run_gemini() {
     local prompt="$3"      # Review prompt to send
     
     debug_log "$log_prefix" "Starting Gemini execution with model args: $model_args"
+    debug_log "$log_prefix" "Prompt length: ${#prompt} characters"
+    debug_log "$log_prefix" "Prompt first 200 chars: ${prompt:0:200}"
     
     # Execute with timeout if available
     if command -v timeout >/dev/null 2>&1; then
-        timeout "${GEMINI_TIMEOUT}s" bash -c "echo \"\$prompt\" | gemini -s -y ${model_args}" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
+        timeout "${GEMINI_TIMEOUT}s" bash -c 'echo "$0" | gemini -s -y '"${model_args}" "$prompt" >"$TEMP_STDOUT" 2>"$TEMP_STDERR"
         return $?
     else
         debug_log "$log_prefix" "timeout command not available, using manual timeout handling"
@@ -298,9 +300,10 @@ fi
 PRINCIPLES=$(
     cat <<'EOF'
 ## 原則
-Gemini のレビューにて改善点を指摘された場合は、その改善点に従って修正せよ。
-レビュー内容に問題がなく、改善点がすべてクリアになった場合のみ「REVIEW_COMPLETED」とだけ発言せよ。
-レビュー内容が空、もしくは「REVIEW_RATE_LIMITED」とだけ書かれていた場合は、「REVIEW_RATE_LIMITED」とだけ発言せよ。
+- Gemini のレビュー内容を受けて行動せよ. ただし盲信はしないこと
+- 改善点を指摘された場合は、その改善点に従って修正せよ
+- レビュー内容に問題がなく、改善点がすべてクリアになった場合のみ「REVIEW_COMPLETED」とだけ発言せよ
+- レビュー内容が空、もしくは「REVIEW_RATE_LIMITED」とだけ書かれていた場合は、「REVIEW_RATE_LIMITED」とだけ発言せよ
 EOF
 )
 
@@ -385,6 +388,8 @@ TEMP_STDERR=$(mktemp)
 debug_log "GEMINI" "Temporary files created: stdout=$TEMP_STDOUT, stderr=$TEMP_STDERR"
 
 # Run Gemini Pro model
+debug_log "GEMINI" "Prompt length: ${#REVIEW_PROMPT} characters"
+debug_log "GEMINI" "Prompt preview (first 200 chars): ${REVIEW_PROMPT:0:200}"
 GEMINI_EXIT_CODE=0
 run_gemini "" "GEMINI" "$REVIEW_PROMPT" || GEMINI_EXIT_CODE=$?
 
