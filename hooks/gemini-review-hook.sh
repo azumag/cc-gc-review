@@ -250,6 +250,8 @@ elif [[ $GEMINI_EXIT_CODE -ne 0 ]] || [[ -z $GEMINI_REVIEW ]]; then
         "rateLimitExceeded"
         "Quota exceeded"
         "RESOURCE_EXHAUSTED"
+        "Resource has been exhausted"
+        "check quota"
         "Too Many Requests"
         "Gemini 2\.5 Pro Requests" # Note: Properly escaped for regex
     )
