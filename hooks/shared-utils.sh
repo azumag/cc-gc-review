@@ -20,7 +20,7 @@ log_error() {
 # This ensures consistent JSON output and proper shell exit codes for CI systems
 safe_exit() {
     local reason="${1:-Script terminated safely}"
-    local decision="${2:-allow}"
+    local decision="${2:-approve}"
     
     # Safely escape the reason for JSON
     local escaped_reason
@@ -35,7 +35,7 @@ EOF
     
     # Return appropriate exit code based on decision
     # - "block" decisions return exit 1 (failure) to signal CI systems
-    # - "allow" decisions return exit 0 (success) to let CI continue
+    # - "approve" decisions return exit 0 (success) to let CI continue
     # This dual approach ensures compatibility with both JSON-aware and exit-code-only CI systems
     if [ "$decision" = "block" ]; then
         exit 1
