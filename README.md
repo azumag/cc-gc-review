@@ -1,8 +1,5 @@
 # cc-gc-review
 
-Claude Code と Gemini を stop hook 連携する。
-Claude Code での作業完了時に自動的に Gemini がレビューを実行し、結果を Claude Code に直接指示します。
-
 ## 概要
 
 このツールは、Claude Codeのstop hookから呼び出され、作業内容をGeminiでレビューし、その結果をClaude Codeに直接表示する自動レビューシステムです。
